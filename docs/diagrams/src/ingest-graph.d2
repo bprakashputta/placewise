@@ -1,0 +1,29 @@
+# The LangGraph ingest graph (one trace per resume in LangSmith).
+vars: {d2-config: {theme-id: 0; pad: 40}}
+direction: right
+
+classes: {
+  node: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; border-radius: 10; font-color: "#1E1B4B"; stroke-width: 2}}
+  ai: {style: {fill: "#FFF7ED"; stroke: "#EA580C"; border-radius: 10; font-color: "#7C2D12"; stroke-width: 2}}
+  code: {style: {fill: "#ECFDF5"; stroke: "#059669"; border-radius: 10; font-color: "#064E3B"; stroke-width: 2}}
+  end: {shape: oval; style: {fill: "#F1F5F9"; stroke: "#64748B"; font-color: "#334155"}}
+  warn: {style: {fill: "#FEF2F2"; stroke: "#DC2626"; border-radius: 10; font-color: "#7F1D1D"; stroke-width: 2}}
+}
+
+receive: "receive\nhash file · dedupe" {class: node}
+parse: "parse + screen\nPDF/DOCX/TXT · hidden text\ninjection · two-column\n(no AI, 30 ms)" {class: code}
+extract: "extract\nClaude Sonnet 5.5\nstructured profile\n+ evidence quotes\n(cached by file hash)" {class: ai}
+validate: "validate\nquotes exist in resume\nyears from dates\nnormalize names\nquality label" {class: code}
+embed: "embed + store\nsection chunks → Voyage\none DB transaction" {class: node}
+
+dup: "duplicate\n(identical file)" {class: end}
+attention: "needs attention\n(scan / corrupt file)" {class: warn}
+done: "searchable\ncandidate" {class: end}
+
+receive -> parse: "new file"
+receive -> dup: "seen before" {style.stroke-dash: 3}
+parse -> extract: "readable"
+parse -> attention: "unusable" {style: {stroke: "#DC2626"; stroke-dash: 3}}
+extract -> validate
+validate -> embed
+embed -> done
