@@ -107,8 +107,9 @@ async def embed_query(query: str, run_ref: str = "search") -> np.ndarray:
     return np.array(vec, dtype=np.float32)
 
 
-async def vector_search(query: str, f: Filters, k: int = 50, person_ids: list[int] | None = None) -> list[Hit]:
-    vec = await embed_query(query)
+async def vector_search(query: str, f: Filters, k: int = 50, person_ids: list[int] | None = None,
+                        run_ref: str = "search") -> list[Hit]:
+    vec = await embed_query(query, run_ref)
     where, args = _where(f, person_ids)
     async with pool().connection() as conn:
         async with conn.transaction():
@@ -171,7 +172,7 @@ def group_by_candidate(hits: list[Hit], score_attr: str = "rrf", per_person: int
 
 
 async def hybrid(query: str, f: Filters, k: int = 50, mode: str = "hybrid",
-                 person_ids: list[int] | None = None) -> list[Hit]:
-    vec = await vector_search(query, f, k, person_ids) if mode in ("hybrid", "vector") else []
+                 person_ids: list[int] | None = None, run_ref: str = "search") -> list[Hit]:
+    vec = await vector_search(query, f, k, person_ids, run_ref) if mode in ("hybrid", "vector") else []
     kw = await keyword_search(query, f, k, person_ids) if mode in ("hybrid", "keyword") else []
     return fuse(vec, kw)

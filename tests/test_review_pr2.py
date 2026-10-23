@@ -80,10 +80,8 @@ def test_concurrent_run_is_refused_by_the_database(monkeypatch):
                 class C:
                     async def fetchone(self_inner): return (SPEC.model_dump(),)
                 return C()
-            if sql.startswith("SELECT run_id"):          # the app-level check passes (the race window)
-                class C:
-                    async def fetchone(self_inner): return None
-                return C()
+            if sql.startswith("UPDATE match_runs SET status='failed'"):   # stale sweep (nothing stale here)
+                return None
             if sql.startswith("INSERT INTO match_runs"):
                 raise psycopg.errors.UniqueViolation("duplicate key value violates match_runs_one_running")
             raise AssertionError(sql)

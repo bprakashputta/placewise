@@ -276,11 +276,12 @@ async def run_match(job_order_id: int, user_id: int | None = None) -> str:
     spec = JobSpec.model_validate(row[0])
     await spend_check()   # refuse up front (clean 429) instead of failing every assessment later
     async with pool().connection() as conn:
-        cur = await conn.execute(
-            "SELECT run_id FROM match_runs WHERE job_order_id=%s AND status='running' "
-            "AND started_at > now() - make_interval(mins => %s)", (job_order_id, STALE_RUN_MIN))
-        if await cur.fetchone():
-            raise RunInProgress("a match is already running for this job order")
+        # A run 'running' for longer than STALE_RUN_MIN is dead: mark it failed so the unique index
+        # (migration 007) only ever collides with a live run.
+        await conn.execute(
+            "UPDATE match_runs SET status='failed', error='timed out; please run matching again', finished_at=now() "
+            "WHERE job_order_id=%s AND status='running' AND started_at <= now() - make_interval(mins => %s)",
+            (job_order_id, STALE_RUN_MIN))
     run_id = f"m-{uuid.uuid4().hex[:10]}"
     steps = hard_filters(spec)
     relaxed: list[str] = []
@@ -306,7 +307,7 @@ async def run_match(job_order_id: int, user_id: int | None = None) -> str:
 async def _finish(run_id: str, job_order_id: int, spec: JobSpec, f: Filters) -> None:
     try:
         query = spec.title + ". " + "; ".join(r.text for r in spec.requirements)
-        hits = await hybrid(query, f, k=80)
+        hits = await hybrid(query, f, k=80, run_ref=run_id)
         hits = await rerank(query, hits[:60], top_k=50, run_ref=run_id)
         groups = group_by_candidate(hits, "rerank")[:TOP_N]
         ids = [g.person_id for g in groups]
@@ -333,9 +334,10 @@ async def _finish(run_id: str, job_order_id: int, spec: JobSpec, f: Filters) -> 
                 status = "done" if ok or not results else "failed"   # every assessment failed → failed run
                 await conn.execute(
                     "UPDATE match_runs SET status=%s, candidates=%s, cost_usd=%s, error=%s, finished_at=now() "
-                    "WHERE run_id=%s", (status, len(ok), round(sum(r["cost"] for r in ok), 5),
+                    "WHERE run_id=%s AND status='running'", (status, len(ok), round(sum(r["cost"] for r in ok), 5),
                                         "; ".join(errs) or None, run_id))
     except Exception as e:
         async with pool().connection() as conn:
-            await conn.execute("UPDATE match_runs SET status='failed', error=%s, finished_at=now() WHERE run_id=%s",
+            await conn.execute("UPDATE match_runs SET status='failed', error=%s, finished_at=now() "
+                               "WHERE run_id=%s AND status='running'",
                                (f"{type(e).__name__}: {e}"[:1000], run_id))

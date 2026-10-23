@@ -484,9 +484,10 @@ def _engine_pool(monkeypatch, running: bool):
     def handler(sql, params):
         if sql.lstrip().startswith("SELECT spec"):
             return _Cur(one=(spec,))
-        if "status='running'" in sql and sql.lstrip().startswith("SELECT"):
-            return _Cur(one=("m-busy",) if running else None)
         if "INSERT INTO match_runs" in sql:
+            if running:   # a live run holds the match_runs_one_running unique index (migration 007)
+                import psycopg
+                raise psycopg.errors.UniqueViolation("match_runs_one_running")
             inserts.append(params)
         return _Cur()
 
@@ -500,7 +501,11 @@ def test_run_match_refuses_second_concurrent_run(monkeypatch):
     async def ok():
         return None
 
+    async def count(f):
+        return 99
+
     monkeypatch.setattr(engine, "spend_check", ok)
+    monkeypatch.setattr(engine, "_count", count)
     with pytest.raises(engine.RunInProgress):
         asyncio.run(engine.run_match(1, 2))
     assert inserts == []

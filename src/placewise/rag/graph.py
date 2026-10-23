@@ -77,7 +77,7 @@ async def n_understand(s: AskState) -> AskState:
 async def n_retrieve(s: AskState) -> AskState:
     t0 = time.perf_counter()
     plan = QueryPlan.model_validate(s["plan"])
-    hits = await hybrid(plan.search_query or s["question"], plan.filters, k=60, person_ids=s.get("person_ids"))
+    hits = await hybrid(plan.search_query or s["question"], plan.filters, k=60, person_ids=s.get("person_ids"), run_ref="ask")
     return {"hits": hits, "timings": {**s["timings"], "retrieve_ms": int((time.perf_counter() - t0) * 1000)}}
 
 
