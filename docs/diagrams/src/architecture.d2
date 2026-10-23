@@ -19,7 +19,7 @@ users: Users {
 app: "Placewise (Docker Compose)" {
   class: group
   web: "Web portal\nNext.js 16 · shadcn/ui" {class: svc}
-  api: "API\nFastAPI · stateless\ncandidates · upload · queue status" {class: svc}
+  api: "API\nFastAPI · stateless · signed-in users only\ncandidates · upload · job orders\nAsk chat (route → RAG) · matching runs" {class: svc}
   worker: "Ingest workers ×3\n4 job slots each\nLangGraph pipeline" {class: svc}
   web -> api: "/api/* only"
   api -> worker: "job queue in Postgres\n(SKIP LOCKED)" {style.stroke-dash: 3}
@@ -27,14 +27,14 @@ app: "Placewise (Docker Compose)" {
 
 data: Data {
   class: group
-  db: "Postgres 17 + pgvector\npeople · resume files · profiles\nsection chunks (HNSW + full-text)\njob queue · extraction cache · LLM cost log" {class: store}
+  db: "Postgres 17 + pgvector\npeople · resume files · profiles\nsection chunks (HNSW + full-text)\njob orders · matches · conversations\nusers · job queue · LLM cost log" {class: store}
   files: "Resume files\nstorage volume (uploads)\n+ seed resumes (read-only)" {class: store}
 }
 
 ai: "External AI services" {
   class: group
-  claude: "Anthropic\nClaude Sonnet 5.5\nprofile extraction" {class: ext}
-  voyage: "Voyage AI\nvoyage-4-large\nembeddings (1024-dim)" {class: ext}
+  claude: "Anthropic\nSonnet 5.5: extraction, answers, scoring\nHaiku 5.5: query understanding, routing" {class: ext}
+  voyage: "Voyage AI\nvoyage-4-large embeddings\nrerank-3" {class: ext}
   langsmith: "LangSmith\ntraces · evals" {class: ext}
 }
 
@@ -54,4 +54,7 @@ app.worker -> data.files: "read file"
 app.worker -> ai.claude
 app.worker -> ai.voyage
 app.worker -> ai.langsmith: "one trace per resume" {style.stroke-dash: 3}
+app.api -> ai.claude: "Ask · job orders · matching"
+app.api -> ai.voyage: "search · rerank"
+app.api -> ai.langsmith: "one trace per question / run" {style.stroke-dash: 3}
 dev.seed -> data.db: "evals: stored vs key" {style.stroke-dash: 3}

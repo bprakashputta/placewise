@@ -1,0 +1,82 @@
+# Portal data model (src/placewise/migrations/004–006): users, job orders, matching, Ask conversations.
+# Key columns only. The ingest tables (people, resume_files, profiles, chunks) are in data-model.d2.
+vars: {d2-config: {theme-id: 0; pad: 40}}
+direction: right
+
+classes: {
+  table: {shape: sql_table; style: {fill: "#4F46E5"; stroke: "#EEF2FF"; font-color: "#FFFFFF"; font-size: 15}}
+  ref: {shape: sql_table; style: {fill: "#64748B"; stroke: "#F8FAFC"; font-color: "#FFFFFF"; font-size: 15}}
+}
+
+users: {
+  class: table
+  id: bigserial {constraint: primary_key}
+  username: "text unique"
+  role: "admin | recruiter"
+  password_hash: "argon2id"
+}
+
+job_orders: {
+  class: table
+  id: bigserial {constraint: primary_key}
+  title: text
+  raw_notes: "text (hiring-manager call)"
+  spec: "jsonb (requirements must/nice, open questions)"
+  status: "open | closed"
+  created_by: bigint {constraint: foreign_key}
+}
+
+match_runs: {
+  class: table
+  run_id: "text" {constraint: primary_key}
+  job_order_id: bigint {constraint: foreign_key}
+  status: "running | done | failed"
+  filters: "jsonb (+ relaxed steps)"
+  cost_usd: numeric
+}
+
+matches: {
+  class: table
+  id: bigserial {constraint: primary_key}
+  run_id: text {constraint: foreign_key}
+  person_id: bigint {constraint: foreign_key}
+  score: "0-100 (computed by code)"
+  recommendation: "submit | consider | pass"
+  verdicts: "jsonb (per requirement + quote)"
+  status: "proposed | approved | rejected"
+  decided_by: bigint {constraint: foreign_key}
+}
+
+conversations: {
+  class: table
+  id: bigserial {constraint: primary_key}
+  user_id: bigint {constraint: foreign_key}
+  job_order_id: "bigint (optional)" {constraint: foreign_key}
+  title: text
+  last_message_at: timestamptz
+}
+
+conversation_messages: {
+  class: table
+  id: bigserial {constraint: primary_key}
+  conversation_id: bigint {constraint: foreign_key}
+  role: "user | assistant"
+  kind: "greeting | search | follow_up | job_order ..."
+  response: "jsonb (answer, citations, candidates)"
+  person_ids: "bigint[] (for follow-ups)"
+  cost_usd: numeric
+}
+
+people: {
+  class: ref
+  id: "bigserial (ingest)" {constraint: primary_key}
+}
+
+job_orders.created_by -> users.id
+match_runs.job_order_id -> job_orders.id
+matches.run_id -> match_runs.run_id
+matches.person_id -> people.id
+matches.decided_by -> users.id
+conversations.user_id -> users.id
+conversations.job_order_id -> job_orders.id
+conversation_messages.conversation_id -> conversations.id
