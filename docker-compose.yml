@@ -27,6 +27,7 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     environment:
+      APP_ENV: ${APP_ENV:-dev}
       DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise
       APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in .env}
       DAILY_LLM_SPEND_CAP_USD: ${DAILY_LLM_SPEND_CAP_USD:-10}
@@ -60,13 +61,13 @@ services:
       - api
     volumes:
       - ./web:/app
-      - web_node_modules:/app/node_modules
-      - web_next:/app/.next
+      # Anonymous volumes keep the image's node_modules/.next from being hidden by the
+      # bind mount. After changing dependencies:  docker compose up --build -V web
+      - /app/node_modules
+      - /app/.next
     ports:
       - "127.0.0.1:3000:3000"
     restart: unless-stopped
 
 volumes:
   db_data:
-  web_node_modules:
-  web_next:

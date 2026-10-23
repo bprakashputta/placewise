@@ -12,7 +12,8 @@ from .config import get_settings
 from .db import pool
 
 _LANGSMITH_TTL_S = 60
-_langsmith_cache: tuple[float, dict] | None = None
+_LANGSMITH_FAIL_TTL_S = 15   # retry sooner after a failure, but not on every poll
+_langsmith_cache: tuple[float, float, dict] | None = None  # (checked_at, ttl, result)
 
 
 async def check_db() -> dict:
@@ -43,8 +44,12 @@ def _check_langsmith_sync() -> dict:
 async def check_langsmith() -> dict:
     global _langsmith_cache
     now = time.monotonic()
-    if _langsmith_cache and now - _langsmith_cache[0] < _LANGSMITH_TTL_S:
-        return _langsmith_cache[1]
-    result = await asyncio.wait_for(asyncio.to_thread(_check_langsmith_sync), timeout=10)
-    _langsmith_cache = (now, result)
+    if _langsmith_cache and now - _langsmith_cache[0] < _langsmith_cache[1]:
+        return _langsmith_cache[2]
+    try:
+        result = await asyncio.wait_for(asyncio.to_thread(_check_langsmith_sync), timeout=10)
+    except asyncio.TimeoutError:
+        # Cache timeouts too. Otherwise every poll during an outage starts another thread.
+        result = {"ok": False, "detail": "timed out"}
+    _langsmith_cache = (now, _LANGSMITH_TTL_S if result["ok"] else _LANGSMITH_FAIL_TTL_S, result)
     return result

@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
-// The browser only ever talks to this Next.js server. Requests to /api/* are proxied
-// to the FastAPI container over the internal Docker network, so the API is never
-// exposed publicly and the login cookie stays same-origin.
+// The browser only ever talks to this Next.js server. ONLY /api/* is proxied to the
+// FastAPI container's /api/* routes over the internal Docker network. API docs, /livez
+// and dev routes live outside /api and are never reachable through the web origin.
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
@@ -17,7 +17,7 @@ const nextConfig: NextConfig = {
     },
   },
   async rewrites() {
-    return [{ source: "/api/:path*", destination: `${API_INTERNAL_URL}/:path*` }];
+    return [{ source: "/api/:path*", destination: `${API_INTERNAL_URL}/api/:path*` }];
   },
 };
 
