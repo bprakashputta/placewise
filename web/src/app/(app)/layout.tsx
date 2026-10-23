@@ -14,11 +14,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <SidebarInset>
           <TopBar />
-          {/* Normal pages are padded and centered. The Ask workspace (full-bleed split view) always takes the
-              whole area under the top bar, whatever the chat length: :has() drops the padding and max width. */}
+          {/* Normal pages are padded and centered. While Ask is on screen it sets html[data-ask-full] and the
+              page area goes full-bleed (whole area under the top bar, whatever the chat length). */}
           <main
             id="main"
-            className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-8 sm:py-8 has-[[data-ask-workspace]]:max-w-none has-[[data-ask-workspace]]:overflow-hidden has-[[data-ask-workspace]]:p-0 sm:has-[[data-ask-workspace]]:p-0"
+            className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-8 sm:py-8 [html[data-ask-full]_&]:max-w-none [html[data-ask-full]_&]:overflow-hidden [html[data-ask-full]_&]:p-0 sm:[html[data-ask-full]_&]:p-0"
           >
             {children}
           </main>

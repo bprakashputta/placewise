@@ -55,7 +55,7 @@ function EvalCard({ e, className }: { e: EvalResult; className?: string }) {
 
         <dl className={cn("grid gap-px overflow-hidden rounded-lg border bg-border", e.metrics.length > 1 && "sm:grid-cols-2")}>
           {e.metrics.map((m) => (
-            <div key={m.label} className="bg-card px-3 py-2.5">
+            <div key={`${m.label}-${m.value}`} className="bg-card px-3 py-2.5">
               <dt className="sr-only">{m.label}</dt>
               <dd className="text-lg font-semibold tabular-nums">{m.value}</dd>
               <dd className="text-xs leading-snug text-muted-foreground">{m.label}</dd>

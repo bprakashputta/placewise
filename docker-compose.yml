@@ -46,7 +46,7 @@ services:
       db:
         condition: service_healthy
     # Development: reload on code changes. The venv lives in /opt/venv, so mounting src is safe.
-    command: ["uvicorn", "placewise.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
+    command: ["uvicorn", "placewise.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "75", "--reload", "--reload-dir", "/app/src"]
     volumes:
       - ./src:/app/src
       # Seed page (dev): aggregates + files only. data/seed/truth is deliberately NOT mounted.

@@ -68,8 +68,8 @@ export const EVAL_RESULTS: EvalResult[] = [
     title: "Ask answers",
     headline: { value: "21/21", label: "quotes verified against the cited resume" },
     metrics: [
-      { value: "~10–15 s", label: "Per question" },
-      { value: "~$0.03", label: "Per question" },
+      { value: "~10–15 s", label: "Time per question" },
+      { value: "~$0.03", label: "Cost per question" },
       { value: "0", label: "Emails or phones leaked to an injection question" },
       { value: "2", label: "Questions checked, every citation compared" },
     ],

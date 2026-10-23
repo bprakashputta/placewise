@@ -44,15 +44,23 @@ const isWide = (px: number) => typeof window !== "undefined" && window.matchMedi
  * candidates on the right. Each column scrolls on its own; the page itself doesn't scroll.
  */
 export function AskView() {
-  // On Ask the chats list is the navigation, so fold the app menu to its icon rail for more room.
-  // It comes back as it was when you leave Ask, and can still be expanded at any time.
+  // While Ask is on screen: (1) the page area goes full-bleed (html[data-ask-full], read by the app
+  // layout), and (2) the app menu folds to its icon rail, since the chats list is the navigation here.
+  // Both are undone in the cleanup, which also runs when Next keeps this page alive but hidden after you
+  // navigate away, so other pages never inherit Ask's layout.
   const { open: menuOpen, setOpen: setMenuOpen } = useSidebar();
-  const menuWasOpen = useRef(menuOpen);
+  const menuOpenNow = useRef(menuOpen);
   useEffect(() => {
-    const restore = menuWasOpen.current;
-    setMenuOpen(false);
+    menuOpenNow.current = menuOpen;
+  });
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.askFull = "1";
+    const folded = menuOpenNow.current;
+    if (folded) setMenuOpen(false);
     return () => {
-      if (restore) setMenuOpen(true);
+      delete root.dataset.askFull;
+      if (folded) setMenuOpen(true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
