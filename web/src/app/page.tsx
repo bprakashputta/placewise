@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SystemStatus } from "./system-status";
 
 // Block 0 placeholder: proves browser → web → api → db (and LangSmith) all connect.
@@ -13,9 +14,14 @@ export default function Home() {
         </p>
       </header>
       <SystemStatus />
-      <a href="/seed" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
-        View synthetic seed data (dev) →
-      </a>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <a href="/seed" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+          View synthetic seed data (dev) →
+        </a>
+        <Link href="/dashboard" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+          Open portal →
+        </Link>
+      </div>
     </main>
   );
 }
