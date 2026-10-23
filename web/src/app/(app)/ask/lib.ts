@@ -72,6 +72,7 @@ const GREETING_TITLE = /^(hi+|hey+|hello+|yo|hiya|thanks?|thank you|good (mornin
  */
 export function isGreetingOnly(c: ConversationSummary): boolean {
   if (c.job_order_id) return false;
+  if (typeof c.has_search === "boolean") return !c.has_search;   // exact, from the API
   const t = (c.title ?? "").trim();
   return !t || t === "New chat" || (GREETING_TITLE.test(t) && t.split(/\s+/).length <= 4 && !t.includes(","));
 }

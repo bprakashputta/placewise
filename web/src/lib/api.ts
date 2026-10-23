@@ -280,6 +280,8 @@ export type ConversationSummary = {
   created_at: string;
   last_message_at: string;
   message_count: number;
+  /** True once the chat holds a real answer (search, follow-up or job order), not just small talk. */
+  has_search?: boolean;
 };
 
 export type Conversation = ConversationSummary & { messages: Message[] };

@@ -18,7 +18,9 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 _CONV_SQL = """
     SELECT c.id, c.title, c.job_order_id, j.title AS job_order_title, c.created_at, c.last_message_at,
            (c.last_message_at > now() - interval '24 hours' AND (j.id IS NULL OR j.status = 'open')) AS active,
-           (SELECT count(*) FROM conversation_messages m WHERE m.conversation_id = c.id) AS message_count
+           (SELECT count(*) FROM conversation_messages m WHERE m.conversation_id = c.id) AS message_count,
+           EXISTS (SELECT 1 FROM conversation_messages m WHERE m.conversation_id = c.id
+                   AND m.kind IN ('search', 'follow_up', 'job_order')) AS has_search
     FROM conversations c LEFT JOIN job_orders j ON j.id = c.job_order_id
 """
 _MSG_COLS = "id, role, kind, content, response, suggestions, person_ids, created_at"

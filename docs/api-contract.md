@@ -71,7 +71,7 @@ questions run the RAG pipeline. Follow-ups ("which of those have PMP?") reuse th
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/conversations` | `[{id, title, job_order_id, job_order_title, active, created_at, last_message_at, message_count}]`, newest first, max 50. `active` = a message in the last 24 h and the job order (if any) is still open |
+| GET | `/api/conversations` | `[{id, title, job_order_id, job_order_title, active, created_at, last_message_at, message_count, has_search}]` (`has_search`: the chat holds a real answer, not just small talk), newest first, max 50. `active` = a message in the last 24 h and the job order (if any) is still open |
 | POST | `/api/conversations` | body `{"job_order_id"?: int}` → the new conversation `{id, title, job_order_id, job_order_title, active, created_at, last_message_at, message_count, messages: [...]}`. A conversation tied to a job order starts with one assistant `intro` message. 404 if the job order doesn't exist |
 | GET | `/api/conversations/{id}` | `{id, title, job_order_id, job_order_title, active, created_at, last_message_at, message_count, messages: [Message]}` · 404 if not yours |
 | POST | `/api/conversations/{id}/messages` | body `{"content": str (1–2000 chars, not blank)}` → `{"user_message": Message, "assistant_message": Message}`. Greetings take <1 s; searches ~10–15 s. 429 at the spend cap (nothing is saved). 404 if not yours |

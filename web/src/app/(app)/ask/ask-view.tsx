@@ -85,7 +85,7 @@ export function AskView() {
   );
 
   return (
-    <div data-ask-workspace className="relative flex h-[calc(100svh-3.5rem)] w-full min-w-0 overflow-hidden">
+    <div data-ask-workspace className="relative flex h-[calc(100svh-3.5rem)] sm:h-[calc(100svh-4rem)] w-full min-w-0 overflow-hidden">
       {chatsDocked && (
         <aside className="hidden w-[248px] shrink-0 border-r bg-muted/30 lg:block dark:bg-muted/10">{chats({ onCollapse: () => setChatsDocked(false) })}</aside>
       )}
