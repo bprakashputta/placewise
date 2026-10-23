@@ -2,38 +2,30 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import ReactMarkdown, { type Components } from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { ArrowUp, Check, CircleAlert, FileText, Loader2, Search, Sparkles, User } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowUp, Briefcase, CircleAlert, FileText, Loader2, MessagesSquare, Plus, SearchX, Sparkles } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { QualityBadge } from "@/components/quality-badge";
 import { ResumeViewer, type ViewerTarget } from "@/components/resume-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useUser } from "@/components/auth/user-provider";
-import { ApiError, apiFetch, type AskCandidate, type AskResponse, type Citation } from "@/lib/api";
-import { disciplineLabel, formatUsd, formatYears, humanize, licenseLabel, qualityLabel } from "@/lib/format";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ApiError,
+  SEARCH_KINDS,
+  apiFetch,
+  useApi,
+  type Citation,
+  type Conversation,
+  type ConversationSummary,
+  type Message,
+  type SendMessageResponse,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-// Resume section names from the search index → recruiter wording.
-const SECTION_LABELS: Record<string, string> = {
-  job: "Work history",
-  jobs: "Work history",
-  summary: "Summary",
-  credentials: "Licenses & certifications",
-  skills: "Skills",
-  education: "Education",
-};
-
-function sectionLabel(section: string): string {
-  return SECTION_LABELS[section] ?? humanize(section);
-}
-
-/** "Austin · Austin" → "Austin": the metro is only worth showing when it adds something. */
-function placeLabel(city: string | null, metro: string | null): string {
-  return [city, metro && metro !== city ? metro : null].filter(Boolean).join(" · ");
-}
+import { Answer, Markdown, PendingReply, sectionLabel } from "./answer";
+import { ConversationsPanel } from "./conversations-panel";
 
 const EXAMPLES = [
   "Who holds a Texas PE with drainage experience in DFW?",
@@ -41,25 +33,17 @@ const EXAMPLES = [
   "Find MEP engineers in Houston who know Revit and are LEED AP.",
 ];
 
-// Rough timings of the RAG graph (~10–15 s total), used to narrate progress while waiting.
-const STAGES = [
-  { label: "Understanding your question", at: 0 },
-  { label: "Searching resumes", at: 2500 },
-  { label: "Ranking candidates", at: 5500 },
-  { label: "Writing the answer", at: 8000 },
-];
+const MAX_CHARS = 2000;
+const TIMEOUT_MS = 90_000;
 
-type Turn = {
-  id: number;
-  question: string;
-  response?: AskResponse;
-  error?: string;
-};
+/** A message as shown: server messages plus the optimistic user bubble, which may have failed. */
+type UIMessage = Message & { localKey: string; failed?: string };
 
 function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.status === 429) return "Today's AI spend cap has been reached, so Ask is paused until tomorrow. An admin can raise the cap.";
-    if (e.status === 422) return "That question is too short or too long. Ask in a full sentence (3–2000 characters).";
+    if (e.status === 422) return `That message is too short or too long (1–${MAX_CHARS} characters).`;
+    if (e.status === 404) return "This chat doesn't exist or isn't yours. Start a new chat.";
     return e.message;
   }
   if (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError"))
@@ -67,246 +51,214 @@ function errorMessage(e: unknown): string {
   return "Can't reach the server. Check your connection and try again.";
 }
 
-/** Plan filters → readable chips, e.g. {license_codes:["PE:TX"], min_years: 8} → "PE · TX", "8+ yrs". */
-function filterChips(filters: Record<string, unknown>): string[] {
-  const chips: string[] = [];
-  for (const [key, value] of Object.entries(filters ?? {})) {
-    if (value === null || value === undefined || value === "" || value === false) continue;
-    if (Array.isArray(value)) {
-      if (value.length === 0) continue;
-      chips.push(...value.map((v) => (key.includes("license") ? licenseLabel(String(v)) : humanize(String(v)))));
-    } else if (key === "min_years") chips.push(`${value}+ yrs`);
-    else if (key === "discipline") chips.push(disciplineLabel(String(value)));
-    else if (key === "metro") chips.push(String(value));
-    else if (value === true) chips.push(humanize(key));
-    else chips.push(key === "quality" ? qualityLabel(String(value)) : String(value));
-  }
-  return chips;
-}
+const withKey = (m: Message): UIMessage => ({ ...m, localKey: `m${m.id}` });
 
-const md: Components = {
-  p: ({ children }) => <p className="leading-relaxed [&:not(:first-child)]:mt-3">{children}</p>,
-  ul: ({ children }) => <ul className="mt-3 list-disc space-y-1.5 pl-5 marker:text-muted-foreground/60">{children}</ul>,
-  ol: ({ children }) => <ol className="mt-3 list-decimal space-y-1.5 pl-5 marker:text-muted-foreground">{children}</ol>,
-  li: ({ children }) => <li className="pl-1 leading-relaxed">{children}</li>,
-  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-  h1: ({ children }) => <h3 className="mt-4 text-base font-semibold first:mt-0">{children}</h3>,
-  h2: ({ children }) => <h3 className="mt-4 text-base font-semibold first:mt-0">{children}</h3>,
-  h3: ({ children }) => <h4 className="mt-4 text-sm font-semibold first:mt-0">{children}</h4>,
-  // Answers are model output over untrusted resume text: only allow same-site links, render others as text.
-  a: ({ href, children }) =>
-    href && href.startsWith("/") && !href.startsWith("//") ? (
-      <a href={href} className="font-medium text-brand underline-offset-2 hover:underline">
-        {children}
-      </a>
-    ) : (
-      <span>{children}</span>
-    ),
-  code: ({ children }) => <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]">{children}</code>,
-  blockquote: ({ children }) => <blockquote className="mt-3 border-l-2 pl-3 text-muted-foreground italic">{children}</blockquote>,
-  table: ({ children }) => (
-    <div className="mt-3 overflow-x-auto">
-      <table className="w-full text-left text-sm [&_td]:border-t [&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2 [&_th]:py-1.5 [&_th]:font-medium">{children}</table>
-    </div>
-  ),
-};
-
-function PendingStages() {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    const start = Date.now();
-    const t = setInterval(() => setElapsed(Date.now() - start), 250);
-    return () => clearInterval(t);
-  }, []);
-  const current = STAGES.reduce((idx, s, i) => (elapsed >= s.at ? i : idx), 0);
-  return (
-    <div className="space-y-2" role="status" aria-live="polite" aria-label={`${STAGES[current].label}…`}>
-      {STAGES.map((s, i) => (
-        <div key={s.label} className={cn("flex items-center gap-2 text-sm", i > current && "text-muted-foreground/60")}>
-          <span className="flex size-4 items-center justify-center">
-            {i < current ? (
-              <Check className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            ) : i === current ? (
-              <Loader2 className="size-4 animate-spin text-brand" aria-hidden="true" />
-            ) : (
-              <span className="size-1.5 rounded-full bg-muted-foreground/40" aria-hidden="true" />
-            )}
-          </span>
-          <span className={cn(i === current && "font-medium")}>
-            {s.label}
-            {i === current && "…"}
-          </span>
-        </div>
-      ))}
-      <p className="pt-1 text-xs text-muted-foreground tabular-nums">{(elapsed / 1000).toFixed(0)} s · usually 10–15 s</p>
-    </div>
-  );
-}
-
-function CandidateCard({ c, cited }: { c: AskCandidate; cited: boolean }) {
-  return (
-    <li className={cn("flex flex-col gap-2 rounded-lg border bg-card p-3", cited && "border-brand/40")}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Link href={`/candidates/${c.person_id}`} className="text-sm font-medium hover:underline">
-              {c.full_name}
-            </Link>
-            {cited && <Badge className="h-4 bg-brand-soft px-1.5 text-[10px] text-brand">Cited</Badge>}
-          </div>
-          <p className="line-clamp-1 text-xs text-muted-foreground">{c.headline ?? disciplineLabel(c.discipline)}</p>
-        </div>
-        <QualityBadge quality={c.quality} short className="shrink-0" />
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {[placeLabel(c.city, c.metro), c.years_experience !== null ? formatYears(c.years_experience) : null].filter(Boolean).join(" · ")}
-      </p>
-      <div className="flex flex-wrap items-center gap-1">
-        {c.license_codes.map((code) => (
-          <Badge key={code} variant="outline" className="font-normal">
-            {licenseLabel(code)}
-          </Badge>
-        ))}
-        <Button variant="ghost" size="xs" asChild className="ml-auto">
-          <Link href={`/candidates/${c.person_id}`}>View</Link>
-        </Button>
-      </div>
-    </li>
-  );
-}
-
-function Answer({ r, onCite }: { r: AskResponse; onCite: (c: Citation) => void }) {
-  const { user } = useUser();
-  const isAdmin = user?.role === "admin";
-  const chips = filterChips(r.plan?.filters ?? {});
-  const citedIds = new Set(r.citations.map((c) => c.person_id));
-  const cited = r.candidates.filter((c) => citedIds.has(c.person_id));
-  const others = r.candidates.filter((c) => !citedIds.has(c.person_id));
-  return (
-    <div className="space-y-5">
-      <div className="text-sm">
-        {/* No images: an injected resume could otherwise make the browser fetch an attacker URL */}
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={md} disallowedElements={["img"]} unwrapDisallowed>
-          {r.answer}
-        </ReactMarkdown>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs">
-        <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
-          <Search className="size-3.5" aria-hidden="true" /> How I searched
-        </span>
-        {chips.map((c) => (
-          <Badge key={c} variant="outline" className="bg-background font-normal">
-            {c}
-          </Badge>
-        ))}
-        {r.plan?.search_query && <span className="min-w-0 text-muted-foreground italic">&ldquo;{r.plan.search_query}&rdquo;</span>}
-        {isAdmin && (
-          <span className="ml-auto text-muted-foreground tabular-nums">
-            {[
-              r.timings_ms?.total_ms ? `${(r.timings_ms.total_ms / 1000).toFixed(1)} s` : null,
-              r.cost_usd !== undefined ? formatUsd(r.cost_usd, 3) : null,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        )}
-      </div>
-
-      {r.citations.length > 0 && (
-        <section aria-label="Citations" className="space-y-2">
-          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Sources</h3>
-          <ol className="space-y-1.5">
-            {r.citations.map((c, i) => (
-              <li key={`${c.chunk_id}-${i}`} className="flex gap-2.5">
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded bg-muted text-[11px] font-medium tabular-nums">
-                  {i + 1}
-                </span>
-                <div className="min-w-0 text-sm">
-                  <button
-                    type="button"
-                    onClick={() => onCite(c)}
-                    className="font-medium hover:underline focus-visible:underline focus-visible:outline-none"
-                    aria-label={`Open resume of ${c.candidate_name}, ${c.section}`}
-                  >
-                    {c.candidate_name}
-                  </button>
-                  <span className="text-muted-foreground"> · {sectionLabel(c.section)} · </span>
-                  <Link href={`/candidates/${c.person_id}`} className="text-xs text-brand hover:underline">
-                    Profile
-                  </Link>
-                  <p className="mt-0.5 border-l-2 pl-2.5 text-muted-foreground italic">&ldquo;{c.quote}&rdquo;</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {r.dropped_citations.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {r.dropped_citations.length} quote{r.dropped_citations.length > 1 ? "s" : ""} couldn&apos;t be found in the resumes and{" "}
-          {r.dropped_citations.length > 1 ? "were" : "was"} removed.
-        </p>
-      )}
-
-      {cited.length > 0 && (
-        <section aria-label="Candidates cited in the answer" className="space-y-2">
-          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Cited in the answer ({cited.length})</h3>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {cited.map((c) => (
-              <CandidateCard key={c.person_id} c={c} cited />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {others.length > 0 && (
-        <section aria-label="Other candidates the search found" className="space-y-2">
-          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Other candidates the search found ({others.length})
-          </h3>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {others.map((c) => (
-              <CandidateCard key={c.person_id} c={c} cited={false} />
-            ))}
-          </ul>
-        </section>
-      )}
-    </div>
-  );
+/** `?c=` → conversation id; null = new chat; 0 = present but not a valid id. */
+function parseConversationId(raw: string | null): number | null {
+  if (raw === null || raw === "") return null;
+  return /^\d+$/.test(raw) && Number(raw) > 0 ? Number(raw) : 0;
 }
 
 export function AskView() {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const router = useRouter();
+  const params = useSearchParams();
+  const urlId = parseConversationId(params.get("c"));
+  const list = useApi<ConversationSummary[]>("/api/conversations");
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // The thread on screen. Navigating to another ?c= (or to a new chat) remounts it through `key`;
+  // a new chat that just got its id keeps the same key, so its optimistic messages stay put.
+  const [thread, setThread] = useState<{ key: number; id: number | null; created: number | null }>({ key: 0, id: urlId, created: null });
+  if (thread.id !== urlId) {
+    setThread(
+      urlId !== null && urlId === thread.created
+        ? { key: thread.key, id: urlId, created: null }
+        : { key: thread.key + 1, id: urlId, created: null },
+    );
+  }
+
+  function newChat() {
+    setSheetOpen(false);
+    if (urlId === null) setThread((t) => ({ key: t.key + 1, id: null, created: null }));
+    else router.push("/ask");
+  }
+
+  function onCreated(id: number) {
+    setThread((t) => ({ ...t, created: id }));
+    router.replace(`/ask?c=${id}`, { scroll: false });
+  }
+
+  const panel = (onSelect?: () => void) => (
+    <ConversationsPanel
+      conversations={list.data}
+      error={list.error}
+      loading={list.loading}
+      selectedId={urlId}
+      onNewChat={newChat}
+      onSelect={onSelect}
+      onRetry={list.reload}
+      className="h-full"
+    />
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Ask"
+        description="Chat about your candidate pool. Answers cite the resumes."
+        actions={
+          <Button variant="outline" className="lg:hidden" onClick={() => setSheetOpen(true)}>
+            <MessagesSquare aria-hidden="true" /> Chats
+          </Button>
+        }
+      />
+      <div className="flex items-start gap-6">
+        <aside className="sticky top-20 hidden max-h-[calc(100svh-7rem)] w-[260px] shrink-0 lg:flex lg:flex-col">{panel()}</aside>
+        <div className="min-w-0 flex-1">
+          <ChatThread key={thread.key} id={thread.id} onCreated={onCreated} onChanged={list.reload} onNewChat={newChat} />
+        </div>
+      </div>
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="left" className="w-[300px] gap-0 p-4 pt-12">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Chats</SheetTitle>
+            <SheetDescription>Your saved Ask conversations.</SheetDescription>
+          </SheetHeader>
+          {panel(() => setSheetOpen(false))}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function ChatThread({
+  id,
+  onCreated,
+  onChanged,
+  onNewChat,
+}: {
+  id: number | null;
+  onCreated: (id: number) => void;
+  onChanged: () => void;
+  onNewChat: () => void;
+}) {
+  // Loaded once per mount; the parent remounts this component for a different conversation.
+  const [initialId] = useState(id);
+  const [conversationId, setConversationId] = useState<number | null>(id || null);
+  const [meta, setMeta] = useState<ConversationSummary | null>(null);
+  const [messages, setMessages] = useState<UIMessage[]>([]);
+  const [load, setLoad] = useState<{ status: "loading" | "ready" | "missing" | "error"; error?: ApiError }>(
+    initialId === null ? { status: "ready" } : initialId === 0 ? { status: "missing" } : { status: "loading" },
+  );
+  const [attempt, setAttempt] = useState(0);
+  const [pending, setPending] = useState(false);
   const [text, setText] = useState("");
   const [viewer, setViewer] = useState<ViewerTarget | null>(null);
-  const pending = turns.some((t) => !t.response && !t.error);
-  const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const alive = useRef(true);
+  const scrollTarget = useRef<"bottom" | string | null>(null);
+  const seq = useRef(0);
 
   useEffect(() => {
-    // Bring the newest question into view (its start, so long answers read from the top).
-    endRef.current?.parentElement?.querySelector("li[data-turn]:last-child")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [turns]);
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
-  async function ask(question: string) {
-    const q = question.trim();
-    if (!q || pending) return;
-    const id = Date.now();
-    setTurns((t) => [...t, { id, question: q }]);
+  useEffect(() => {
+    if (!initialId) return;
+    let current = true;
+    apiFetch<Conversation>(`/api/conversations/${initialId}`)
+      .then((c) => {
+        if (!current) return;
+        const { messages: msgs, ...summary } = c;
+        setMeta(summary);
+        setMessages(msgs.map(withKey));
+        scrollTarget.current = "bottom";
+        setLoad({ status: "ready" });
+      })
+      .catch((e: unknown) => {
+        if (!current) return;
+        const err = e instanceof ApiError ? e : new ApiError(0, "Can't reach the server.");
+        setLoad(err.status === 404 || err.status === 422 ? { status: "missing" } : { status: "error", error: err });
+      });
+    return () => {
+      current = false;
+    };
+  }, [initialId, attempt]);
+
+  // Scroll after render: to the bottom when a chat opens, or to the start of the newest question
+  // when one is sent or answered (so long answers read from the top).
+  useEffect(() => {
+    const target = scrollTarget.current;
+    if (!target) return;
+    scrollTarget.current = null;
+    if (target === "bottom") endRef.current?.scrollIntoView({ block: "end" });
+    else document.querySelector(`[data-msg="${target}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [messages, pending]);
+
+  async function send(raw: string) {
+    const content = raw.trim();
+    if (!content || pending) return;
+    const localKey = `local-${++seq.current}`;
+    const optimistic: UIMessage = {
+      id: -seq.current,
+      role: "user",
+      kind: "user",
+      content,
+      response: null,
+      suggestions: [],
+      created_at: new Date().toISOString(),
+      localKey,
+    };
+    // A failed message was never saved, so a resend replaces it rather than stacking up.
+    setMessages((m) => [...m.filter((x) => !x.failed), optimistic]);
+    setPending(true);
     setText("");
+    scrollTarget.current = localKey;
+    const signal = AbortSignal.timeout(TIMEOUT_MS); // never leave the chat stuck "pending" if a request dies
     try {
-      const response = await apiFetch<AskResponse>("/api/ask", {
+      let cid = conversationId;
+      if (cid === null) {
+        // A new chat is only created once there's something to save.
+        const created = await apiFetch<Conversation>("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+          signal,
+        });
+        if (!alive.current) return;
+        cid = created.id;
+        const { messages: _ignored, ...summary } = created;
+        void _ignored;
+        setConversationId(cid);
+        setMeta(summary);
+        onCreated(cid);
+        onChanged();
+      }
+      const res = await apiFetch<SendMessageResponse>(`/api/conversations/${cid}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q }),
-        signal: AbortSignal.timeout(90_000),   // never leave the chat stuck "pending" if a request dies
+        body: JSON.stringify({ content }),
+        signal,
       });
-      setTurns((t) => t.map((x) => (x.id === id ? { ...x, response } : x)));
+      if (!alive.current) return;
+      setMessages((m) => [
+        ...m.map((x) => (x.localKey === localKey ? { ...res.user_message, localKey } : x)),
+        withKey(res.assistant_message),
+      ]);
+      setMeta((m) => m && { ...m, active: true });
+      scrollTarget.current = localKey;
+      onChanged();
     } catch (e) {
-      setTurns((t) => t.map((x) => (x.id === id ? { ...x, error: errorMessage(e) } : x)));
+      if (!alive.current) return;
+      setMessages((m) => m.map((x) => (x.localKey === localKey ? { ...x, failed: errorMessage(e) } : x)));
+      setText((t) => (t.trim() ? t : content)); // keep the text so it can be resent
     }
+    if (!alive.current) return;
+    setPending(false);
     inputRef.current?.focus();
   }
 
@@ -318,25 +270,90 @@ export function AskView() {
       downloadUrl: `/api/candidates/files/${c.resume_file_id}`,
     });
 
+  if (load.status === "missing") {
+    return (
+      <Card className="py-0">
+        <EmptyState
+          icon={SearchX}
+          title="This chat doesn't exist or isn't yours"
+          description="It may have been removed, or it belongs to another user."
+          action={
+            <Button onClick={onNewChat}>
+              <Plus aria-hidden="true" /> New chat
+            </Button>
+          }
+        />
+      </Card>
+    );
+  }
+  if (load.status === "error") {
+    return (
+      <Card className="py-0">
+        <EmptyState
+          icon={CircleAlert}
+          title="Couldn't load this chat"
+          description={load.error?.message ?? "Something went wrong."}
+          action={
+            <Button
+              variant="outline"
+              onClick={() => {
+                setLoad({ status: "loading" });
+                setAttempt((a) => a + 1);
+              }}
+            >
+              Try again
+            </Button>
+          }
+        />
+      </Card>
+    );
+  }
+
+  const last = messages[messages.length - 1];
+  const showSuggestionsFor = !pending && last?.role === "assistant" ? last.localKey : null;
+
   return (
-    <div className="space-y-6">
-      <PageHeader title="Ask" description="Questions about your candidate pool, answered with citations to the resumes." />
+    <div className="space-y-3">
       <Card className="flex min-h-[32rem] flex-col gap-0 py-0">
+        {meta?.job_order_id && (
+          <div className="flex items-center gap-2 border-b px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
+            <Briefcase className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 truncate">
+              About{" "}
+              <Link href={`/job-orders/${meta.job_order_id}`} className="font-medium text-foreground hover:underline">
+                {meta.job_order_title ?? `job order ${meta.job_order_id}`}
+              </Link>
+            </span>
+          </div>
+        )}
         <CardContent className="flex flex-1 flex-col px-0">
-          {turns.length > 0 && <div ref={endRef} className="order-last" />}
-          {turns.length === 0 ? (
+          {load.status === "loading" ? (
+            <div className="space-y-6 px-4 py-5 sm:px-6" aria-busy="true" aria-label="Loading chat">
+              <Skeleton className="ml-auto h-9 w-2/5 rounded-2xl" />
+              <Skeleton className="h-24 w-4/5" />
+              <Skeleton className="ml-auto h-9 w-1/3 rounded-2xl" />
+              <Skeleton className="h-16 w-3/5" />
+            </div>
+          ) : messages.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
               <div className="mb-4 flex size-11 items-center justify-center rounded-xl bg-brand-soft text-brand">
                 <Sparkles className="size-5" aria-hidden="true" />
               </div>
               <h2 className="text-sm font-semibold">Ask anything about your candidates</h2>
               <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                Every answer links back to the resume lines it came from, and quotes are checked against the resumes.
+                Every answer links back to the resume lines it came from, and quotes are checked against the resumes. Ask follow-ups
+                like &ldquo;which of those have a PMP?&rdquo;
               </p>
               <ul className="mt-6 flex max-w-2xl flex-wrap justify-center gap-2" aria-label="Example questions">
                 {EXAMPLES.map((q) => (
                   <li key={q}>
-                    <Button variant="outline" size="sm" onClick={() => ask(q)} className="h-auto rounded-full px-3 py-1.5 text-left whitespace-normal">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => send(q)}
+                      disabled={pending}
+                      className="h-auto rounded-full px-3 py-1.5 text-left whitespace-normal"
+                    >
                       {q}
                     </Button>
                   </li>
@@ -344,80 +361,158 @@ export function AskView() {
               </ul>
             </div>
           ) : (
-            <ol className="flex-1 divide-y" aria-label="Conversation">
-              {turns.map((t) => (
-                <li key={t.id} data-turn className="scroll-mt-20 space-y-4 px-4 py-5 sm:px-6">
-                  <div className="flex items-start gap-3">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
-                      <User className="size-3.5 text-muted-foreground" aria-hidden="true" />
-                    </span>
-                    <p className="pt-1 text-sm font-medium">{t.question}</p>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
-                      <Sparkles className="size-3.5" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0 flex-1 pt-1">
-                      {t.response ? (
-                        <Answer r={t.response} onCite={onCite} />
-                      ) : t.error ? (
-                        <div role="alert" className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-                          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                          <div className="space-y-2">
-                            <p>{t.error}</p>
-                            <Button variant="outline" size="xs" onClick={() => ask(t.question)} disabled={pending}>
-                              Try again
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <PendingStages />
-                      )}
-                    </div>
-                  </div>
+            <ol className="flex-1 space-y-6 px-4 py-5 sm:px-6" aria-label="Conversation">
+              {messages.map((m) => (
+                <li key={m.localKey} data-msg={m.localKey} className="scroll-mt-20">
+                  {m.role === "user" ? (
+                    <UserMessage m={m} pending={pending} onRetry={() => send(m.content)} />
+                  ) : (
+                    <AssistantMessage
+                      m={m}
+                      showSuggestions={m.localKey === showSuggestionsFor}
+                      onSuggestion={send}
+                      onCite={onCite}
+                    />
+                  )}
                 </li>
               ))}
+              {pending && (
+                <li>
+                  <AssistantShell>
+                    <PendingReply />
+                  </AssistantShell>
+                </li>
+              )}
             </ol>
           )}
+          <div ref={endRef} />
         </CardContent>
+        {meta && !meta.active && !pending && (
+          <p className="border-t px-4 py-2 text-xs text-muted-foreground sm:px-6">This chat is closed. Sending a message reopens it.</p>
+        )}
         <form
           className="sticky bottom-0 flex items-end gap-2 rounded-b-xl border-t bg-card p-3"
-          aria-label="Ask a question"
+          aria-label="Send a message"
           onSubmit={(e) => {
             e.preventDefault();
-            ask(text);
+            send(text);
           }}
         >
           <label htmlFor="ask-input" className="sr-only">
-            Your question
+            Your message
           </label>
           <textarea
             id="ask-input"
             ref={inputRef}
             value={text}
             rows={1}
-            maxLength={1000}
+            maxLength={MAX_CHARS}
+            disabled={load.status === "loading"}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                ask(text);
+                send(text);
               }
             }}
-            placeholder={pending ? "Working on your question…" : "Ask about your candidate pool…"}
-            className="max-h-40 min-h-9 flex-1 resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            placeholder={pending ? "Working on it…" : "Ask about your candidate pool…"}
+            className="field-sizing-content max-h-40 min-h-9 flex-1 resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
           />
-          <Button type="submit" size="icon-lg" disabled={pending || !text.trim()} aria-label="Send question">
+          <Button type="submit" size="icon-lg" disabled={pending || !text.trim()} aria-label="Send message">
             {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
           </Button>
         </form>
       </Card>
-      {turns.length > 0 && (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <FileText className="size-3.5" aria-hidden="true" /> History lasts for this visit only. Each question costs a few cents of AI usage.
-        </p>
-      )}
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <FileText className="size-3.5 shrink-0" aria-hidden="true" /> Chats are saved for you. Searches cost a few cents of AI usage; greetings are
+        free.
+      </p>
       <ResumeViewer target={viewer} onClose={() => setViewer(null)} />
     </div>
+  );
+}
+
+function UserMessage({ m, pending, onRetry }: { m: UIMessage; pending: boolean; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <p
+        className={cn(
+          "max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
+          m.failed && "border border-destructive/40",
+        )}
+      >
+        {m.content}
+      </p>
+      {m.failed && (
+        <div role="alert" className="flex max-w-[85%] gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div className="space-y-2">
+            <p>Not sent. {m.failed}</p>
+            <Button variant="outline" size="xs" onClick={onRetry} disabled={pending}>
+              Try again
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistantShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
+        <Sparkles className="size-3.5" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1 pt-1">{children}</div>
+    </div>
+  );
+}
+
+function AssistantMessage({
+  m,
+  showSuggestions,
+  onSuggestion,
+  onCite,
+}: {
+  m: UIMessage;
+  showSuggestions: boolean;
+  onSuggestion: (text: string) => void;
+  onCite: (c: Citation) => void;
+}) {
+  const r = SEARCH_KINDS.has(m.kind) ? m.response : null;
+  const searched = m.kind === "follow_up" ? r?.standalone_question : null;
+  return (
+    <AssistantShell>
+      <div className="space-y-3">
+        {(m.kind === "job_order" || searched) && (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {m.kind === "job_order" && (
+              <Badge variant="outline" className="gap-1 font-normal">
+                <Briefcase className="size-3" aria-hidden="true" /> Job order
+              </Badge>
+            )}
+            {searched && <span className="italic">Searched: {searched}</span>}
+          </div>
+        )}
+        {r ? <Answer text={m.content} r={r} onCite={onCite} /> : <Markdown>{m.content}</Markdown>}
+        {showSuggestions && m.suggestions?.length > 0 && (
+          <ul className="flex flex-wrap gap-2 pt-1" aria-label="Suggested follow-ups">
+            {m.suggestions.slice(0, 3).map((s) => (
+              <li key={s}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSuggestion(s)}
+                  className="h-auto rounded-full px-3 py-1.5 text-left whitespace-normal"
+                >
+                  {s}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </AssistantShell>
   );
 }

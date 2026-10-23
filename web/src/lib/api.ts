@@ -251,3 +251,37 @@ export type SearchResponse = {
     match: string | null;
   }[];
 };
+
+// Conversations: conversational Ask, Block 7 (docs/api-contract.md "Conversations", ADR 018).
+export type MessageKind = "user" | "greeting" | "help" | "off_topic" | "intro" | "search" | "follow_up" | "job_order";
+
+/** Assistant kinds that ran the RAG pipeline and carry a full `response`. */
+export const SEARCH_KINDS: ReadonlySet<MessageKind> = new Set<MessageKind>(["search", "follow_up", "job_order"]);
+
+/** Same shape as POST /api/ask, plus the complete question that was actually searched. */
+export type ConversationResponse = AskResponse & { standalone_question?: string | null };
+
+export type Message = {
+  id: number;
+  role: "user" | "assistant";
+  kind: MessageKind;
+  content: string;
+  response: ConversationResponse | null;
+  suggestions: string[];
+  created_at: string;
+};
+
+export type ConversationSummary = {
+  id: number;
+  title: string;
+  job_order_id: number | null;
+  job_order_title: string | null;
+  active: boolean;
+  created_at: string;
+  last_message_at: string;
+  message_count: number;
+};
+
+export type Conversation = ConversationSummary & { messages: Message[] };
+
+export type SendMessageResponse = { user_message: Message; assistant_message: Message };
