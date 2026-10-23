@@ -207,53 +207,56 @@ function Sidebar({
   return (
     <SidebarPeek collapsed={state === "collapsed" && collapsible === "icon"}>
       {(peek, peekHandlers) => (
-    <div
-      className="group peer hidden text-sidebar-foreground md:block"
-      data-state={peek ? "expanded" : state}
-      data-collapsible={state === "collapsed" && !peek ? collapsible : ""}
-      data-peek={peek ? "" : undefined}
-      data-variant={variant}
-      data-side={side}
-      data-slot="sidebar"
-    >
-      {/* This is what handles the sidebar gap on desktop */}
-      <div
-        data-slot="sidebar-gap"
-        className={cn(
-          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
-          "group-data-[collapsible=offcanvas]:w-0",
-          "group-data-[side=right]:rotate-180",
-          variant === "floating" || variant === "inset"
-            ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
-          // Peeking: the menu opens over the page, so the reserved space stays at the icon rail's width
-          peek && "w-(--sidebar-width-icon)"
-        )}
-      />
-      <div
-        data-slot="sidebar-container"
-        data-side={side}
-        className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
-          // Adjust the padding for floating and inset variants.
-          variant === "floating" || variant === "inset"
-            ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
-          peek && "z-40 shadow-2xl",
-          className
-        )}
-        {...peekHandlers}
-        {...props}
-      >
         <div
-          data-sidebar="sidebar"
-          data-slot="sidebar-inner"
-          className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
+          className="group peer hidden text-sidebar-foreground md:block"
+          data-state={peek ? "expanded" : state}
+          data-collapsible={state === "collapsed" && !peek ? collapsible : ""}
+          data-peek={peek ? "" : undefined}
+          data-variant={variant}
+          data-side={side}
+          data-slot="sidebar"
         >
-          {children}
+          {/* This is what handles the sidebar gap on desktop */}
+          <div
+            data-slot="sidebar-gap"
+            className={cn(
+              "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+              "group-data-[collapsible=offcanvas]:w-0",
+              "group-data-[side=right]:rotate-180",
+              variant === "floating" || variant === "inset"
+                ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
+                : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
+              // Peeking: the menu opens over the page, so the reserved space keeps the icon rail's width
+              peek &&
+                (variant === "floating" || variant === "inset"
+                  ? "w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
+                  : "w-(--sidebar-width-icon)")
+            )}
+          />
+          <div
+            data-slot="sidebar-container"
+            data-side={side}
+            className={cn(
+              "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
+              // Adjust the padding for floating and inset variants.
+              variant === "floating" || variant === "inset"
+                ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
+                : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              peek && "z-40 shadow-2xl",
+              className
+            )}
+            {...props}
+            {...withPeek(props, peekHandlers)}
+          >
+            <div
+              data-sidebar="sidebar"
+              data-slot="sidebar-inner"
+              className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
+            >
+              {children}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
       )}
     </SidebarPeek>
   )
@@ -262,6 +265,20 @@ function Sidebar({
 // Hover (or keyboard focus) on the collapsed icon rail "peeks" the full menu over the page, without
 // moving the page; leaving tucks it back. Short delays stop it flashing when the pointer passes over.
 const SidebarPeekContext = React.createContext(false)
+
+// Call the caller's own handlers too, so passing onMouseEnter/onFocus to <Sidebar> can't disable peek.
+function withPeek(props: React.HTMLAttributes<HTMLDivElement>, peek: PeekHandlers): PeekHandlers {
+  const out: PeekHandlers = {}
+  for (const key of Object.keys(peek) as (keyof PeekHandlers)[]) {
+    const mine = peek[key] as ((e: never) => void) | undefined
+    const theirs = props[key] as ((e: never) => void) | undefined
+    out[key] = ((e: never) => {
+      theirs?.(e)
+      mine?.(e)
+    }) as never
+  }
+  return out
+}
 
 type PeekHandlers = Pick<
   React.HTMLAttributes<HTMLDivElement>,
@@ -276,9 +293,19 @@ function SidebarPeek({
   children: (peek: boolean, handlers: PeekHandlers) => React.ReactNode
 }) {
   const [peek, setPeek] = React.useState(false)
+  const [want, setWant] = React.useState<{ open: boolean; ms: number } | null>(null)
+  // When the rail stops being collapsed (a page expands the menu, ⌘B, the trigger), the hover handlers
+  // go away, so reset the peek here; otherwise it would pop open by itself the next time it collapses.
+  const [wasCollapsed, setWasCollapsed] = React.useState(collapsed)
+  if (wasCollapsed !== collapsed) {
+    setWasCollapsed(collapsed)
+    if (!collapsed) {
+      setPeek(false)
+      setWant(null)
+    }
+  }
   // Handlers record the wanted state; the effect applies it after a short delay. A newer request
   // replaces the pending one (the effect cleanup cancels its timer), which debounces quick passes.
-  const [want, setWant] = React.useState<{ open: boolean; ms: number } | null>(null)
   React.useEffect(() => {
     if (!want) return
     const id = setTimeout(() => setPeek(want.open), want.ms)
