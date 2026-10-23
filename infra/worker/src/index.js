@@ -72,9 +72,56 @@ export default {
       }
     }
     log(502, `all tunnels failed: ${lastErr}`, { attempts });
-    return new Response("Placewise is reconnecting. Please refresh in a few seconds.", {
-      status: 502,
-      headers: { "retry-after": "5" },
+    const wantsPage = request.method === "GET" && (request.headers.get("accept") || "").includes("text/html");
+    if (wantsPage) {
+      // A page that waits for the app to come back and reloads itself, so nobody has to press refresh.
+      return new Response(RECONNECT_PAGE, {
+        status: 503,
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "retry-after": "5" },
+      });
+    }
+    return new Response(JSON.stringify({ detail: "Placewise is reconnecting. Please retry in a few seconds." }), {
+      status: 503,
+      headers: { "content-type": "application/json", "cache-control": "no-store", "retry-after": "5" },
     });
   },
 };
+
+const RECONNECT_PAGE = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Placewise · Reconnecting</title>
+<style>
+  :root { --bg:#f8fafc; --card:#fff; --fg:#0f172a; --muted:#64748b; --accent:#4f46e5; --ring:#e2e8f0; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0b1020; --card:#111827; --fg:#e5e7eb; --muted:#94a3b8; --accent:#818cf8; --ring:#1f2937; } }
+  * { box-sizing:border-box } html,body { height:100% }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+         display:grid; place-items:center; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--ring); border-radius:14px; padding:32px 28px; max-width:420px; width:100%; text-align:center; }
+  .brand { font-weight:700; letter-spacing:-.01em; font-size:18px; margin-bottom:20px }
+  .spin { width:34px; height:34px; border-radius:50%; border:3px solid var(--ring); border-top-color:var(--accent);
+          margin:0 auto 18px; animation:s 0.9s linear infinite }
+  @keyframes s { to { transform:rotate(360deg) } }
+  h1 { font-size:17px; margin:0 0 6px } p { margin:0; color:var(--muted) } small { display:block; margin-top:16px; color:var(--muted) }
+</style></head>
+<body><main class="card">
+  <div class="brand">Placewise</div>
+  <div class="spin" aria-hidden="true"></div>
+  <h1>Reconnecting…</h1>
+  <p>The connection dropped for a moment. This page will reload by itself as soon as Placewise is back. You'll stay signed in.</p>
+  <small id="st">Checking…</small>
+</main>
+<script>
+  const st = document.getElementById("st"); let n = 0;
+  async function check() {
+    n++;
+    try {
+      const r = await fetch("/api/health", { cache: "no-store" });
+      if (r.ok) { st.textContent = "Back online. Reloading…"; location.reload(); return; }
+    } catch (e) {}
+    st.textContent = "Still reconnecting (check " + n + ")";
+    setTimeout(check, 3000);
+  }
+  setTimeout(check, 2000);
+</script>
+<noscript><meta http-equiv="refresh" content="8"></noscript>
+</body></html>`;
