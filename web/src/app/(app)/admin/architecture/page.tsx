@@ -1,18 +1,9 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EvalNumbers } from "../eval-numbers";
 import { DiagramCard, type Diagram } from "./diagram-card";
 
 export const metadata: Metadata = { title: "How it works" };
-
-// Numbers from docs/modules/ingest.md (evals/ingest_db.py and evals/parse_screen.py, all 597 files).
-const NUMBERS = [
-  { value: "597", label: "Resumes ingested", note: "PDF, DOCX and TXT, end to end" },
-  { value: "99.7%", label: "Licenses exact", note: "License type and state both correct" },
-  { value: "563/563", label: "People matched", note: "Multiple resumes linked to one person" },
-  { value: "100%", label: "Unusable & adversarial caught", note: "Precision and recall, before any AI call" },
-  { value: "$0.02", label: "Per resume", note: "Claude Sonnet extraction; embeddings free tier" },
-];
 
 const DIAGRAMS: Diagram[] = [
   {
@@ -26,7 +17,7 @@ const DIAGRAMS: Diagram[] = [
       "The browser only ever talks to the web app. It forwards /api requests to the API, so nothing else is exposed.",
       "The API is stateless: it checks your session, answers questions from the database and puts new work on a queue.",
       "Workers do the slow AI work in the background, so uploads return instantly and more workers can be added when volume grows.",
-      "Postgres (with pgvector) is the single store: people, resumes, profiles, searchable chunks, the job queue and every AI cost.",
+      "Postgres (with pgvector) is the single store: people, resumes, profiles, searchable resume sections, the job queue and every AI cost.",
       "Claude reads resumes, Voyage turns sections into vectors for search, and LangSmith records a trace of every run.",
     ],
   },
@@ -34,7 +25,7 @@ const DIAGRAMS: Diagram[] = [
     step: 2,
     src: "/diagrams/ingest-graph.svg",
     title: "What happens to one resume",
-    alt: "Ingest graph: receive, parse and screen, extract with Claude, validate, embed and store; duplicates and unusable files exit early.",
+    alt: "Ingest graph: receive, parse and screen, extract with Claude, validate, embed and store; duplicates and unreadable files exit early.",
     width: 1922,
     height: 392,
     points: [
@@ -64,14 +55,14 @@ const DIAGRAMS: Diagram[] = [
     step: 4,
     src: "/diagrams/data-model.svg",
     title: "How the data is organized",
-    alt: "Data model: people, resume files, profiles, section chunks with embeddings, ingest jobs, the extraction cache and the AI cost log.",
+    alt: "Data model: people, resume files, profiles, resume sections with embeddings, ingest jobs, the extraction cache and the AI cost log.",
     width: 2247,
     height: 1628,
     points: [
       "A person can have several resume files over time; the latest processed one is the current profile, older ones stay as versions.",
       "Each profile keeps the evidence: credential quotes, findings from screening and validation notes.",
-      "Resumes are split into sections (chunks) with vectors and full-text indexes, which power search and matching later.",
-      "Contact details never go into the searchable chunks, and scoring will use a blind version without names.",
+      "Resumes are split into sections with vectors and full-text indexes, which power search and matching.",
+      "Contact details never go into the searchable sections, and scoring uses a blind version without names.",
       "Every AI call is logged with tokens and cost, which feeds the AI costs page and the spend cap.",
     ],
   },
@@ -85,27 +76,7 @@ export default function ArchitecturePage() {
         description="A walk through Placewise: how a resume becomes a trustworthy, searchable profile."
       />
 
-      <section aria-labelledby="numbers-heading" className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="numbers-heading" className="text-sm font-semibold">
-            Key numbers
-          </h2>
-          <p className="text-xs text-muted-foreground">Measured on the synthetic dataset</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-          {NUMBERS.map((n) => (
-            <Card key={n.label} className="gap-1 py-4">
-              <CardHeader className="px-4">
-                <CardTitle className="text-2xl font-semibold tabular-nums">{n.value}</CardTitle>
-                <CardDescription className="text-sm font-medium text-foreground">{n.label}</CardDescription>
-              </CardHeader>
-              <CardContent className="px-4">
-                <p className="text-xs text-muted-foreground">{n.note}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
+      <EvalNumbers headingId="numbers-heading" />
 
       <div className="space-y-6">
         {DIAGRAMS.map((d) => (

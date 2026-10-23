@@ -6,6 +6,8 @@ import type { NextConfig } from "next";
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
+  // Hide the dev-mode route indicator (it overlaps the UI in demos); errors still surface.
+  devIndicators: false,
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

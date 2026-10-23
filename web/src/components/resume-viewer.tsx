@@ -1,37 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { Download, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 export type ViewerTarget = { title: string; viewUrl: string; downloadUrl: string; subtitle?: string };
 type Load = { state: "loading" } | { state: "ready"; url: string } | { state: "error"; message: string };
 
-// In-page resume viewer: shows the PDF in place, with Download and Close (Esc also closes).
-// The file is fetched once. A PDF is shown in the frame; an error becomes a readable message.
+// In-page resume viewer on the shadcn (Radix) Dialog: focus is trapped inside, Esc and the overlay
+// close it, and focus returns to whatever opened it. The file is fetched once and shown in a frame;
+// "Open in new tab" is the fallback when the browser can't show it inline.
 export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null; onClose: () => void }) {
-  const closeRef = useRef<HTMLButtonElement>(null);
   const [load, setLoad] = useState<Load>({ state: "loading" });
-
-  // Keep the latest onClose in a ref so parent re-renders (the 2s poll) don't re-run the effect,
-  // which used to steal focus back to Close every poll.
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-  const openerRef = useRef<Element | null>(null);
-
-  useEffect(() => {
-    if (!target) return;
-    openerRef.current = document.activeElement;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCloseRef.current();
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    closeRef.current?.focus();
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-      (openerRef.current as HTMLElement | null)?.focus?.(); // return focus to what opened the viewer
-    };
-  }, [target]);
 
   useEffect(() => {
     if (!target) return;
@@ -58,44 +39,52 @@ export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null;
     };
   }, [target]);
 
-  if (!target) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-6"
-         onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label={`Resume: ${target.title}`}
-           className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10"
-           onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-          <div className="min-w-0">
-            <p className="truncate font-medium">{target.title}</p>
-            {target.subtitle && <p className="truncate text-xs text-muted-foreground">{target.subtitle}</p>}
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <a href={target.downloadUrl} download
-               className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Download
-            </a>
-            <button ref={closeRef} onClick={onClose}
-                    className="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted">
-              Close
-            </button>
-          </div>
-        </div>
-        {load.state === "loading" && (
-          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading resume…</div>
-        )}
-        {load.state === "error" && (
-          <div className="flex flex-1 items-center justify-center p-8">
-            <div className="max-w-md rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              <p className="mb-1 font-medium">Can&apos;t show this resume here</p>
-              <p>{load.message}</p>
+    <Dialog open={target !== null} onOpenChange={(open) => !open && onClose()}>
+      {target && (
+        <DialogContent
+          showCloseButton={false}
+          className="flex h-[calc(100dvh-1.5rem)] w-full max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:h-[calc(100dvh-3rem)] sm:max-w-5xl"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="truncate text-base leading-normal">{target.title}</DialogTitle>
+              <DialogDescription className="truncate text-xs">{target.subtitle ?? "Resume"}</DialogDescription>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button variant="ghost" size="sm" asChild>
+                <a href={target.viewUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink aria-hidden="true" /> Open in new tab
+                </a>
+              </Button>
+              <Button size="sm" asChild>
+                <a href={target.downloadUrl} download>
+                  <Download aria-hidden="true" /> Download
+                </a>
+              </Button>
+              <DialogClose asChild>
+                <Button variant="outline" size="sm">
+                  Close
+                </Button>
+              </DialogClose>
             </div>
           </div>
-        )}
-        {load.state === "ready" && (
-          <iframe src={load.url} title={`Resume: ${target.title}`} className="h-full w-full flex-1 bg-neutral-100" />
-        )}
-      </div>
-    </div>
+          {load.state === "loading" && (
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading resume…</div>
+          )}
+          {load.state === "error" && (
+            <div className="flex flex-1 items-center justify-center p-8">
+              <div className="max-w-md rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                <p className="mb-1 font-medium">Can&apos;t show this resume here</p>
+                <p>{load.message}</p>
+              </div>
+            </div>
+          )}
+          {load.state === "ready" && (
+            <iframe src={load.url} title={`Resume: ${target.title}`} className="h-full w-full flex-1 bg-neutral-100" />
+          )}
+        </DialogContent>
+      )}
+    </Dialog>
   );
 }

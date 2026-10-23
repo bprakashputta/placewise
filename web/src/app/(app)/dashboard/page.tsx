@@ -7,7 +7,7 @@ import { DashboardView } from "./dashboard-view";
 export const metadata: Metadata = { title: "Dashboard" };
 
 const STEPS = [
-  { title: "Ingest resumes", body: "Resumes become structured, searchable profiles with verified credentials.", icon: FileUp },
+  { title: "Ingest resumes", body: "Resumes become structured, searchable profiles with credentials backed by resume quotes.", icon: FileUp },
   { title: "Create a job order", body: "Paste hiring-manager notes; Placewise drafts the requirements.", icon: BriefcaseBusiness },
   { title: "Review shortlist", body: "Ranked candidates, each requirement backed by a quote from the resume.", icon: ClipboardCheck },
   { title: "Approve outreach", body: "Nothing sends until you approve the submittal or message.", icon: Send },

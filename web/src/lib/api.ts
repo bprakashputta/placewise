@@ -243,6 +243,7 @@ export type SearchResponse = {
     headline: string | null;
     discipline: string | null;
     metro: string | null;
+    city?: string | null;
     years_experience: number | null;
     license_codes: string[];
     quality: Quality;
