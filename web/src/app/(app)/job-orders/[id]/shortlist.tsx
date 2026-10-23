@@ -28,15 +28,15 @@ import type { Match, MatchDecision, Verdict } from "@/lib/job-types";
 import { cn } from "@/lib/utils";
 
 const REC_STYLES: Record<Match["recommendation"], { label: string; className: string }> = {
-  submit: { label: "Submit", className: "bg-emerald-500/10 text-emerald-700 ring-emerald-600/20 dark:text-emerald-300 dark:ring-emerald-400/25" },
-  consider: { label: "Consider", className: "bg-amber-500/10 text-amber-800 ring-amber-600/25 dark:text-amber-300 dark:ring-amber-400/25" },
+  submit: { label: "Submit", className: "bg-success-soft text-success-strong ring-success/25" },
+  consider: { label: "Consider", className: "bg-warning-soft text-warning-strong ring-warning/30" },
   pass: { label: "Pass", className: "bg-muted text-muted-foreground ring-border" },
 };
 
 const VERDICTS: Record<Verdict["verdict"], { icon: typeof Check; label: string; className: string }> = {
-  met: { icon: Check, label: "Met", className: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
-  partial: { icon: CircleSlash, label: "Partly met", className: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
-  not_met: { icon: X, label: "Not met", className: "bg-red-500/15 text-red-700 dark:text-red-300" },
+  met: { icon: Check, label: "Met", className: "bg-success-soft text-success-strong ring-1 ring-success/25 ring-inset" },
+  partial: { icon: CircleSlash, label: "Partly met", className: "bg-warning-soft text-warning-strong ring-1 ring-warning/30 ring-inset" },
+  not_met: { icon: X, label: "Not met", className: "bg-danger-soft text-danger-strong ring-1 ring-danger/25 ring-inset" },
   unknown: { icon: CircleHelp, label: "Unknown", className: "bg-muted text-muted-foreground" },
 };
 
@@ -61,7 +61,7 @@ function scoreExplanation(total: number, counts: Counts): string {
 function ScoreRing({ score, explanation }: { score: number; explanation: string }) {
   const r = 20;
   const c = 2 * Math.PI * r;
-  const color = score >= 80 ? "text-emerald-500" : score >= 60 ? "text-amber-500" : "text-muted-foreground";
+  const color = score >= 80 ? "text-success" : score >= 60 ? "text-warning" : "text-muted-foreground/60";
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -105,7 +105,7 @@ function VerdictRow({ v }: { v: Verdict }) {
       <div className="min-w-0 space-y-1 text-sm">
         <p className="font-medium">{cleanRequirement(v.requirement)}</p>
         {v.evidence && (
-          <p className="border-l-2 pl-2.5 text-muted-foreground italic">
+          <p className="rounded-r-lg border-l-2 border-brand/50 bg-muted/60 py-1.5 pr-3 pl-2.5 text-foreground/80 italic">
             <span className="text-[11px] font-medium tracking-wide not-italic uppercase">From the resume: </span>&ldquo;{v.evidence}&rdquo;
           </p>
         )}
@@ -126,12 +126,12 @@ function Gaps({ verdicts }: { verdicts: Verdict[] }) {
       {[
         missing.length > 0 && (
           <span key="m">
-            <span className="font-medium text-red-700 dark:text-red-300">Missing:</span> {missing.join(", ")}
+            <span className="font-medium text-danger-strong">Missing:</span> {missing.join(", ")}
           </span>
         ),
         partly.length > 0 && (
           <span key="p">
-            <span className="font-medium text-amber-700 dark:text-amber-300">Partly:</span> {partly.join(", ")}
+            <span className="font-medium text-warning-strong">Partly:</span> {partly.join(", ")}
           </span>
         ),
         unknown.length > 0 && (
@@ -172,8 +172,8 @@ function MatchCard({
   return (
     <li
       className={cn(
-        "rounded-xl border bg-card transition-colors",
-        status === "approved" && "border-emerald-500/40",
+        "rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 hover:shadow-sm",
+        status === "approved" && "border-success/50 ring-1 ring-success/20",
         status === "rejected" && "opacity-70",
       )}
     >
@@ -186,7 +186,7 @@ function MatchCard({
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <Link href={`/candidates/${m.person_id}`} className="font-medium hover:underline">
+                <Link href={`/candidates/${m.person_id}`} className="text-[15px] font-semibold tracking-[-0.01em] hover:underline">
                   {m.full_name}
                 </Link>
                 <Badge className={cn("ring-1 ring-inset", rec.className)}>
@@ -217,12 +217,12 @@ function MatchCard({
           {m.summary && <p className="text-sm leading-relaxed">{m.summary}</p>}
           {m.flags.length > 0 && (
             <div className="space-y-1">
-              <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+              <p className="text-xs font-medium text-warning-strong">
                 {score === 100 ? `100 · ${flagsLabel}` : flagsLabel}
               </p>
               <ul className="space-y-1" aria-label="Flags to check">
                 {m.flags.map((f) => (
-                  <li key={f} className="flex gap-2 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-900 dark:text-amber-200">
+                  <li key={f} className="flex gap-2 rounded-md bg-warning-soft px-2.5 py-1.5 text-xs text-warning-strong">
                     <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden="true" />
                     {f}
                   </li>

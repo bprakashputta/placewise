@@ -1,3 +1,4 @@
+import { Network } from "lucide-react";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { EvalNumbers } from "../eval-numbers";
@@ -72,6 +73,7 @@ export default function ArchitecturePage() {
   return (
     <div className="space-y-8">
       <PageHeader
+        icon={Network}
         title="How it works"
         description="A walk through Placewise: how a resume becomes a trustworthy, searchable profile."
       />

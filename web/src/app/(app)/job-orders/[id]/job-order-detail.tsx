@@ -41,8 +41,8 @@ function requirementBadge(r: Requirement): string | null {
 
 function Requirements({ items }: { items: Requirement[] }) {
   const groups = [
-    { title: "Must have", items: items.filter((r) => r.priority === "must"), dot: "bg-brand" },
-    { title: "Nice to have", items: items.filter((r) => r.priority !== "must"), dot: "bg-muted-foreground/40" },
+    { title: "Must have", items: items.filter((r) => r.priority === "must"), dot: "bg-brand", pill: "bg-brand-soft text-brand-strong ring-brand/20" },
+    { title: "Nice to have", items: items.filter((r) => r.priority !== "must"), dot: "bg-muted-foreground/40", pill: "bg-muted text-muted-foreground ring-border" },
   ];
   return (
     <Card>
@@ -54,7 +54,7 @@ function Requirements({ items }: { items: Requirement[] }) {
         {groups.map((g) =>
           g.items.length === 0 ? null : (
             <div key={g.title} className="space-y-2">
-              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              <p className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset", g.pill)}>
                 {g.title} <span className="tabular-nums">({g.items.length})</span>
               </p>
               <ul className="space-y-2">
@@ -87,10 +87,10 @@ function OpenQuestions({ questions }: { questions: string[] }) {
   const [done, setDone] = useState<Record<number, boolean>>({});
   if (questions.length === 0) return null;
   return (
-    <Card className="border-amber-500/30 bg-amber-500/[0.04]">
+    <Card className="border-warning/30 bg-warning-soft/40">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <MessageCircleQuestion className="size-4 text-amber-600 dark:text-amber-400" aria-hidden="true" /> Ask the hiring manager
+          <MessageCircleQuestion className="size-4 text-warning-strong" aria-hidden="true" /> Ask the hiring manager
         </CardTitle>
         <CardDescription>Things the notes didn&apos;t settle. Tick them off as you get answers.</CardDescription>
       </CardHeader>
@@ -131,11 +131,11 @@ function SpecCard({ jo }: { jo: JobOrder }) {
         <CardTitle>Role</CardTitle>
       </CardHeader>
       <CardContent>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dl className="grid grid-cols-2 gap-2.5 text-sm">
           {rows.map(([k, v]) => (
-            <div key={k} className="contents">
-              <dt className="text-muted-foreground">{k}</dt>
-              <dd className={cn(!v && "text-muted-foreground/70 italic")}>{v ?? "Not stated"}</dd>
+            <div key={k} className="rounded-lg border bg-muted/40 px-3 py-2">
+              <dt className="text-[11px] font-medium tracking-[0.04em] text-muted-foreground uppercase">{k}</dt>
+              <dd className={cn("mt-0.5 font-medium", !v && "font-normal text-muted-foreground/70 italic")}>{v ?? "Not stated"}</dd>
             </div>
           ))}
         </dl>
@@ -164,7 +164,7 @@ function MatchProgress({ startedAt, candidates }: { startedAt: number; candidate
         {MATCH_STAGES.map((s, i) => (
           <p key={i} className={cn("flex items-center gap-2 text-sm", i > current && "text-muted-foreground/60")}>
             {i < current ? (
-              <Check className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <Check className="size-4 text-success" aria-hidden="true" />
             ) : i === current ? (
               <Loader2 className="size-4 animate-spin text-brand" aria-hidden="true" />
             ) : (
@@ -283,7 +283,7 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
       {back}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{j.title}</h1>
+          <h1 className="text-2xl leading-tight font-semibold tracking-[-0.022em] sm:text-[26px]">{j.title}</h1>
           <p className="text-sm text-muted-foreground">
             {j.client ? capitalize(j.client) : "Client not stated"} · created {relativeTime(j.created_at)}
           </p>
@@ -320,7 +320,7 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
 
         <section aria-labelledby="shortlist-heading" className="min-w-0 space-y-4 lg:col-span-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="shortlist-heading" className="text-lg font-semibold tracking-tight">
+            <h2 id="shortlist-heading" className="text-base font-semibold tracking-[-0.01em]">
               Shortlist
             </h2>
             {run?.status === "done" && (
@@ -332,17 +332,17 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
           </div>
 
           {startError && (
-            <p role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p role="alert" className="flex items-center gap-2 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger-strong">
               <CircleAlert className="size-4 shrink-0" aria-hidden="true" /> {startError}
             </p>
           )}
           {run && run.relaxed.length > 0 && (
-            <p className="flex gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-sm text-sky-900 dark:text-sky-200">
+            <p className="flex gap-2 rounded-lg border border-info/25 bg-info-soft px-3 py-2 text-sm text-info-strong">
               <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> {relaxedNotice(run.relaxed)}
             </p>
           )}
           {run?.status === "failed" && (
-            <p role="alert" className="flex gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p role="alert" className="flex gap-2 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger-strong">
               <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> Matching failed{run.error ? `: ${run.error}` : ""}. Try running it again.
             </p>
           )}

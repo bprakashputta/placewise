@@ -69,7 +69,7 @@ export function ApprovalsView() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Approvals" description="Candidates approved for submittal, across all job orders. Nothing is sent automatically." />
+      <PageHeader icon={ClipboardCheck} title="Approvals" description="Candidates approved for submittal, across all job orders. Nothing is sent automatically." />
       {error ? (
         <ApiErrorState error={error} onRetry={reload} />
       ) : items && items.length === 0 ? (

@@ -1,3 +1,4 @@
+import { FlaskConical } from "lucide-react";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { EvalNumbers } from "../eval-numbers";
@@ -8,6 +9,7 @@ export default function EvalsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        icon={FlaskConical}
         title="Evals"
         description="Extraction accuracy and screening, measured against the synthetic answer key."
       />

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Search, SearchX, Sparkles, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, SearchX, Sparkles, Users, X } from "lucide-react";
 import { ApiErrorState } from "@/components/api-state";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -19,7 +19,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi, type CandidateList, type CandidateRow, type Facets, type SearchResponse } from "@/lib/api";
 
-import { disciplineLabel, formatNumber, formatYears, licenseLabel, qualityLabel, relativeTime } from "@/lib/format";
+import { disciplineLabel, initials, formatNumber, formatYears, licenseLabel, qualityLabel, relativeTime } from "@/lib/format";
 import { NeedsAttentionList } from "./needs-attention-list";
 import { UploadDialog } from "./upload-dialog";
 
@@ -196,7 +196,7 @@ function CandidateTable() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_7rem]">
+      <div className="grid grid-cols-2 gap-2 rounded-xl border bg-card p-2 shadow-xs lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_7rem]">
         <div className="col-span-2 lg:col-span-1">
           <div className="flex gap-2">
             <div className="min-w-0 flex-1">
@@ -270,10 +270,10 @@ function CandidateTable() {
 
       <Card className="gap-0 overflow-hidden py-0">
         <Table aria-busy={list.loading}>
-          <TableHeader className="bg-muted/40">
+          <TableHeader className="bg-muted/50">
             <TableRow className="hover:bg-transparent">
               {COLUMNS.map((c) => (
-                <TableHead key={c.label} className={`h-10 px-4 text-xs font-medium tracking-wide text-muted-foreground uppercase ${c.className ?? ""}`}>
+                <TableHead key={c.label} className={`h-10 px-4 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase ${c.className ?? ""}`}>
                   {c.label}
                 </TableHead>
               ))}
@@ -325,7 +325,10 @@ function CandidateTable() {
               const showMetro = c.metro && c.metro !== c.city;
               return (
                 <TableRow key={c.person_id} className="cursor-pointer" onClick={() => router.push(href)}>
-                  <TableCell className="max-w-72 px-4 py-2.5 whitespace-normal">
+                  <TableCell className="max-w-80 px-4 py-3 whitespace-normal">
+                    <div className="flex gap-3">
+                    <span className="mt-0.5 hidden size-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[11px] font-semibold text-brand-strong ring-1 ring-brand/10 sm:flex" aria-hidden="true">{initials(c.full_name)}</span>
+                    <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       {smart && (
                         <span className="text-xs text-muted-foreground tabular-nums" aria-label={`Rank ${idx + 1}`}>
@@ -344,6 +347,8 @@ function CandidateTable() {
                       <p className="mt-1 line-clamp-2 border-l-2 border-brand/40 pl-2 text-xs text-muted-foreground italic">{c.match}</p>
                     )}
                     <p className="text-xs text-muted-foreground lg:hidden">{[c.city, showMetro ? c.metro : null].filter(Boolean).join(" · ")}</p>
+                    </div>
+                    </div>
                   </TableCell>
                   <TableCell className="hidden px-4 md:table-cell">
                     <span className="text-sm">{disciplineLabel(c.discipline)}</span>
@@ -356,7 +361,7 @@ function CandidateTable() {
                     <div className="flex flex-wrap gap-1">
                       {c.license_codes.length === 0 && <span className="text-muted-foreground">–</span>}
                       {c.license_codes.map((code) => (
-                        <Badge key={code} variant="outline" className="font-normal">
+                        <Badge key={code} variant="outline" className="font-medium text-[11px]">
                           {licenseLabel(code)}
                         </Badge>
                       ))}
@@ -403,6 +408,7 @@ export function CandidatesView() {
     <div className="space-y-6">
       <PageHeader
         title="Candidates"
+        icon={Users}
         description="Every ingested resume as a structured, searchable profile."
         actions={<UploadDialog />}
       />

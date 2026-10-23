@@ -40,17 +40,17 @@ import {
 import { cn } from "@/lib/utils";
 
 const STATUS_STYLES: Record<string, string> = {
-  active: "bg-emerald-500/10 text-emerald-700 ring-emerald-600/20 dark:text-emerald-300 dark:ring-emerald-400/25",
-  pursuing: "bg-sky-500/10 text-sky-700 ring-sky-600/20 dark:text-sky-300 dark:ring-sky-400/25",
-  exam_scheduled: "bg-sky-500/10 text-sky-700 ring-sky-600/20 dark:text-sky-300 dark:ring-sky-400/25",
+  active: "bg-success-soft text-success-strong ring-success/25",
+  pursuing: "bg-info-soft text-info-strong ring-info/25",
+  exam_scheduled: "bg-info-soft text-info-strong ring-info/25",
   expired: "bg-muted text-muted-foreground ring-border line-through decoration-1",
 };
 
 const RATING_STYLES: Record<string, string> = {
-  excellent: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  good: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  fair: "bg-amber-500/10 text-amber-800 dark:text-amber-300",
-  poor: "bg-red-500/10 text-red-700 dark:text-red-300",
+  excellent: "bg-success-soft text-success-strong",
+  good: "bg-success-soft text-success-strong",
+  fair: "bg-warning-soft text-warning-strong",
+  poor: "bg-danger-soft text-danger-strong",
 };
 
 /** A finding about hidden text or AI-directed instructions is a security warning, not just info. */
@@ -60,7 +60,7 @@ function isSecurityFinding(f: string) {
 
 function Quote({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <blockquote className={cn("border-l-2 border-border pl-3 text-sm text-muted-foreground italic", className)}>
+    <blockquote className={cn("rounded-r-lg border-l-2 border-brand/50 bg-muted/60 py-2 pr-3 pl-3 text-sm text-foreground/80 italic", className)}>
       {children}
     </blockquote>
   );
@@ -71,7 +71,7 @@ function CredentialItem({ c }: { c: Credential }) {
     <li className="space-y-2 py-3 first:pt-0 last:pb-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-sm font-medium">
-          {c.status === "active" && <BadgeCheck className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
+          {c.status === "active" && <BadgeCheck className="size-4 text-success" aria-hidden="true" />}
           {credentialLabel(c.key, c.state)}
         </span>
         <Badge className={cn("ring-1 ring-inset", STATUS_STYLES[c.status] ?? STATUS_STYLES.expired)}>{humanize(c.status)}</Badge>
@@ -92,15 +92,16 @@ function Header({ d, onView }: { d: Detail; onView: () => void }) {
     p.open_to_relocation && { icon: Plane, text: "Open to relocation" },
   ].filter(Boolean) as { icon: typeof MapPin; text: string }[];
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+    <Card className="relative">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-brand-soft/80 to-transparent" />
+      <CardContent className="relative flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
         <div className="flex min-w-0 gap-4">
-          <Avatar className="size-14 shrink-0">
-            <AvatarFallback className="bg-brand-soft text-lg font-semibold text-brand">{initials(p.full_name)}</AvatarFallback>
+          <Avatar className="size-16 shrink-0 shadow-sm ring-4 ring-card">
+            <AvatarFallback className="bg-brand-gradient text-xl font-semibold text-white">{initials(p.full_name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">{p.full_name}</h1>
+              <h1 className="text-2xl font-semibold tracking-[-0.022em] sm:text-[26px]">{p.full_name}</h1>
               <QualityBadge quality={d.quality} issues={d.quality_issues} />
             </div>
             {p.headline && <p className="text-sm text-muted-foreground">{p.headline}</p>}
@@ -189,9 +190,9 @@ function QualityCard({ d }: { d: Detail }) {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           {security.length ? (
-            <ShieldAlert className="size-4 text-fuchsia-600 dark:text-fuchsia-400" aria-hidden="true" />
+            <ShieldAlert className="size-4 text-tamper" aria-hidden="true" />
           ) : (
-            <ShieldCheck className="size-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            <ShieldCheck className="size-4 text-success" aria-hidden="true" />
           )}
           Quality &amp; security
         </CardTitle>
@@ -199,7 +200,7 @@ function QualityCard({ d }: { d: Detail }) {
       </CardHeader>
       <CardContent className="space-y-5">
         {security.length > 0 && (
-          <div role="alert" className="space-y-1.5 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 p-3 text-sm text-fuchsia-900 dark:text-fuchsia-200">
+          <div role="alert" className="space-y-1.5 rounded-lg border border-tamper/25 bg-tamper-soft p-3 text-sm text-tamper-strong">
             <p className="flex items-center gap-1.5 font-medium">
               <ShieldAlert className="size-4 shrink-0" aria-hidden="true" /> Security warning
             </p>
@@ -260,7 +261,7 @@ function QualityCard({ d }: { d: Detail }) {
             <p className="text-sm font-medium">Validation notes</p>
             <ul className="space-y-1.5">
               {d.validation_notes.map((n) => (
-                <li key={n} className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-sm text-amber-900 dark:text-amber-200">
+                <li key={n} className="flex gap-2 rounded-md border border-warning/30 bg-warning-soft px-2.5 py-2 text-sm text-warning-strong">
                   <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                   {n}
                 </li>
@@ -349,7 +350,7 @@ export function CandidateDetail({ params }: { params: Promise<{ id: string }> })
       {d.findings.some(isSecurityFinding) && (
         <a
           href="#quality"
-          className="flex items-center gap-2 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-2 text-sm text-fuchsia-900 hover:bg-fuchsia-500/15 dark:text-fuchsia-200"
+          className="flex items-center gap-2 rounded-lg border border-tamper/25 bg-tamper-soft px-3 py-2 text-sm text-tamper-strong transition-colors hover:border-tamper/40"
         >
           <ShieldAlert className="size-4 shrink-0" aria-hidden="true" />
           <span>
