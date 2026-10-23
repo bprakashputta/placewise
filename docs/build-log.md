@@ -3,6 +3,10 @@
 Real problems hit during the build only: symptom → cause → fix. Newest first.
 
 ## 2026-10-22 (Block 2)
+- **Full ingest: 597 resumes, 3 workers, ~$12.12 (Sonnet extraction, $0.020/resume; Voyage embeddings within the free tier).** End-to-end eval (stored data vs answer key): routing 597/597 (581 processed, 8 exact duplicates, 8 needs-attention), licenses+state 99.7%, years MAE 0.04, metro/discipline 100%, unusable and adversarial 100%/100%, flawed 88% precision / 92% recall, 4,713 chunks all embedded.
+- **Over-merging people: 436 app people vs 563 true.** *Cause:* matching on "same email OR same phone"; the synthetic 555-01xx numbers collide (and real resumes share office lines). *Fix:* same email, or same phone AND same name. Re-ingested from scratch: 563 = 563, and 26/26 multi-file people linked. The cost was $0.11, not $0: the 5 resumes from the first test batch predated the extraction cache. Everything else hit the cache.
+- **Ingest test run issues.** The prompts mount needed a container *recreate*, not a restart. Voyage allowed 3 RPM without a payment method on file (the owner added billing). A race between two versions of one person violated `people_email_uq` (now an ON CONFLICT upsert). Embedding-failure retries re-ran Claude, about $0.26 wasted, which led to migration 002 (extraction cache). The spend cap (an app setting I created at $10) now pauses jobs instead of failing them; raised to $25 for the ingest. GitHub rejected the workflow push until the CLI token had the `workflow` scope.
+
 - **An agent worktree pointer was committed** (`7da7b8d`). `git add -A` picked up `.claude/worktrees/agent-…` (the portal-shell agent's isolated worktree) as an embedded repository. *Fix:* `git rm --cached` plus ignore `.claude/worktrees/` (`ba3470c`). No files were exposed; it was a gitlink pointer only.
 
 - **Parse/screen eval (no AI), all 597 files, 30 ms/file:** unusable detection 100% precision / 100% recall (8/8), adversarial 100%/100% (5/5), 0 hidden-text false positives, 100% of true facts present in extracted text for 589/589 readable files, two-column reading order 69/69.

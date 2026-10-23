@@ -62,3 +62,14 @@ async def retry_failed() -> dict:
             """UPDATE ingest_jobs SET status = 'queued', attempts = 0, not_before = now(), error = NULL,
                       updated_at = now() WHERE status = 'failed'""")
         return {"requeued": cur.rowcount}
+
+
+@dev_router.post("/reset")
+async def reset_ingested(confirm: str = "") -> dict:
+    """Dev only: delete ingested people/files/profiles/chunks/jobs so everything can be re-ingested.
+    Keeps extraction_cache and llm_calls, so a re-ingest costs no LLM spend."""
+    if confirm != "yes":
+        raise HTTPException(400, "pass confirm=yes")
+    async with pool().connection() as conn:
+        await conn.execute("TRUNCATE chunks, profiles, ingest_jobs, resume_files, people RESTART IDENTITY CASCADE")
+    return {"reset": True}

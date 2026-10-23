@@ -81,11 +81,15 @@ async def _store_processed(meta: dict, parse_info: dict, v, chunks: list[dict], 
     email, phone = norm_email(prof.get("email")), norm_phone(prof.get("phone"))
     async with pool().connection() as conn:
         async with conn.transaction():
-            # Same person if email (or phone) matches an existing record: this file is a new version.
+            # Same person = same email, or same phone AND same name. A phone alone never merges
+            # people (shared office lines; the eval caught over-merging with phone-only matching).
             cur = await conn.execute(
-                """SELECT id FROM people WHERE (%s::text IS NOT NULL AND email_norm = %s)
-                       OR (%s::text IS NOT NULL AND phone_norm = %s) ORDER BY id LIMIT 1""",
-                (email, email, phone, phone))
+                """SELECT id FROM people
+                   WHERE (%s::text IS NOT NULL AND email_norm = %s)
+                      OR (%s::text IS NULL AND %s::text IS NOT NULL AND phone_norm = %s
+                          AND lower(display_name) = lower(%s))
+                   ORDER BY id LIMIT 1""",
+                (email, email, email, phone, phone, prof.get("full_name") or ""))
             row = await cur.fetchone()
             new_person = row is None
             if new_person and email:
