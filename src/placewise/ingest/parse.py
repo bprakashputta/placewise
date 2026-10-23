@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import codecs
 import io
 import re
 import zipfile
@@ -27,16 +28,33 @@ class Parsed:
     issues: list[str] = field(default_factory=list)
 
 
+def _looks_like_text(sample: bytes) -> bool:
+    """UTF-8 (a multi-byte char cut at the sample edge is fine), or legacy Windows-1252/Latin-1 text."""
+    if not sample:
+        return True  # empty: treated as an (empty) text file, which parse flags as unusable
+    try:
+        codecs.getincrementaldecoder("utf-8")().decode(sample, final=False)  # tolerates a cut-off tail
+        return True
+    except UnicodeDecodeError:
+        pass
+    # Legacy (Windows-1252/Latin-1) text is still MOSTLY plain ASCII: accents are the exception.
+    ascii_ok = sum(1 for b in sample if 32 <= b < 127 or b in (9, 10, 13))
+    return b"\x00" not in sample and ascii_ok / len(sample) > 0.90
+
+
+def decode_text(data: bytes) -> str:
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("cp1252", errors="replace")
+
+
 def sniff(data: bytes) -> str:
     if data[:5] == b"%PDF-":
         return "pdf"
     if data[:2] == b"PK":
         return "docx"
-    try:
-        data[:4000].decode("utf-8")
-        return "txt"
-    except UnicodeDecodeError:
-        return "unknown"
+    return "txt" if _looks_like_text(data[:4000]) else "unknown"
 
 
 def _is_hidden(ch: dict) -> bool:
@@ -127,10 +145,16 @@ def parse_docx(data: bytes) -> Parsed:
         rgb = f.color.rgb if f.color is not None and f.color.type is not None else None
         return rgb is not None and str(rgb).upper() in ("FFFFFF", "FEFEFE", "FDFDFD")
 
+    from docx.oxml.ns import qn
+    from docx.text.run import Run
+
     def add(paragraph) -> None:
-        vis = "".join(r.text for r in paragraph.runs if not run_hidden(r))
-        hid = "".join(r.text for r in paragraph.runs if run_hidden(r))
-        visible.append(vis if paragraph.runs else paragraph.text)
+        # paragraph.runs skips runs inside <w:hyperlink> (emails/LinkedIn are often links), so walk
+        # every <w:r> in the paragraph XML instead.
+        runs = [Run(r, paragraph) for r in paragraph._p.iter(qn("w:r"))]
+        vis = "".join(r.text for r in runs if not run_hidden(r))
+        hid = "".join(r.text for r in runs if run_hidden(r))
+        visible.append(vis if runs else paragraph.text)
         if hid.strip():
             hidden.append(hid.strip())
 
@@ -148,7 +172,7 @@ def parse_docx(data: bytes) -> Parsed:
 
 
 def parse_txt(data: bytes) -> Parsed:
-    text = data.decode("utf-8", errors="replace").strip()
+    text = decode_text(data).strip()
     if len(text) < 40:
         return Parsed("unusable", "txt", text=text, reason="text file is almost empty")
     return Parsed("ok", "txt", text=text)

@@ -149,13 +149,17 @@ async def view_file(resume_file_id: int):
 @router.post("/upload")
 async def upload(file: UploadFile) -> dict:
     data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if not data:
+        raise HTTPException(415, "The file is empty")
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, "File is larger than 10 MB")
     kind = sniff(data)
     if kind not in ("pdf", "docx", "txt"):
         raise HTTPException(415, "Only PDF, DOCX or TXT resumes are supported")
     sha = hashlib.sha256(data).hexdigest()
-    safe = re.sub(r"[^A-Za-z0-9._ -]", "_", Path(file.filename or "").name)[:120].lstrip(". ")
+    name = re.sub(r"[^A-Za-z0-9._ -]", "_", Path(file.filename or "").name).lstrip(". ")
+    stem, dot, ext = name.rpartition(".")
+    safe = f"{stem[:110]}.{ext[:10]}" if dot and stem else name[:120]  # keep the extension when trimming
     if not safe or "." not in safe:
         safe = f"resume.{kind}"  # also covers names like "." / ".." that would point at a directory
     folder = UPLOADS / sha
