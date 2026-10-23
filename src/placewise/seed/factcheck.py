@@ -62,6 +62,22 @@ def check(text: str, c: CandidateFacts) -> list[str]:
         m = re.search(pat, scrubbed)
         if m:
             problems.append(f"invented credential not in facts: {m.group(0)!r} ({fam})")
+    # Family exemptions are too coarse for the traps that matter: check the exact level/state.
+    held = [cr for cr in c.credentials if cr.counts]
+    if any(cr.key == "LEED_GA" for cr in held) and not any(cr.key == "LEED_AP" for cr in held):
+        if re.search(r"LEED\s+AP|LEED Accredited Professional", scrubbed, flags=re.I):
+            problems.append("claims LEED AP but the facts only have LEED Green Associate")
+    state_names = {"TX": "Texas", "OK": "Oklahoma", "LA": "Louisiana", "AR": "Arkansas", "CO": "Colorado",
+                   "NM": "New Mexico", "AZ": "Arizona", "GA": "Georgia", "IL": "Illinois"}
+    for key, words in (("PE", r"(?:\bP\.?E\.?\b|Professional Engineer)"), ("RA", r"(?:Registered|Licensed) Architect")):
+        held_states = {cr.state for cr in held if cr.key == key}
+        for st, name in state_names.items():
+            if st in held_states:
+                continue
+            if re.search(rf"(?:{name}|\b{st}\b)[^.\n]{{0,25}}{words}|{words}[^.\n]{{0,25}}(?:{name}|\b{st}\b)",
+                         scrubbed, flags=re.I if key == "RA" else 0):
+                problems.append(f"implies a {key} in {name}, which the facts don't have")
+                break
     if re.search(r"```|^(here is|sure,|certainly)", text.strip(), flags=re.I):
         problems.append("contains commentary or code fences")
     return problems

@@ -13,7 +13,7 @@ import random
 from faker import Faker
 from pydantic import BaseModel, Field
 
-from .facts import CandidateFacts, Constraints, label_quality, make_candidate, split_for
+from .facts import CandidateFacts, Constraints, label_quality, make_candidate, recompute_years, split_for
 
 
 class Req(BaseModel):
@@ -297,6 +297,7 @@ def targeted_candidates(start_index: int, seed: int) -> list[CandidateFacts]:
                                  if not (cr.counts and cr.key in bad_keys and (None in bad_states or cr.state in bad_states))]
             c.targets_job_order = f"{jo.job_order_id}:{'strong' if miss is None else 'near_miss_' + miss}"
             c.split = split_for(c.person_id, seed)
+            recompute_years(c)
             label_quality(c)
             out.append(c)
             i += 1

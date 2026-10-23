@@ -11,17 +11,25 @@ export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null;
   const closeRef = useRef<HTMLButtonElement>(null);
   const [load, setLoad] = useState<Load>({ state: "loading" });
 
+  // Keep the latest onClose in a ref so parent re-renders (the 2s poll) don't re-run the effect,
+  // which used to steal focus back to Close every poll.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const openerRef = useRef<Element | null>(null);
+
   useEffect(() => {
     if (!target) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    openerRef.current = document.activeElement;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onCloseRef.current();
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     closeRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      (openerRef.current as HTMLElement | null)?.focus?.(); // return focus to what opened the viewer
     };
-  }, [target, onClose]);
+  }, [target]);
 
   useEffect(() => {
     if (!target) return;
@@ -34,8 +42,10 @@ export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null;
           const body = await res.json().catch(() => null);
           throw new Error(body?.detail ?? `Couldn't load this resume (error ${res.status}).`);
         }
-        objectUrl = URL.createObjectURL(await res.blob());
-        if (alive) setLoad({ state: "ready", url: objectUrl });
+        const blob = await res.blob();
+        if (!alive) return; // closed while loading: don't create a URL nobody will revoke
+        objectUrl = URL.createObjectURL(blob);
+        setLoad({ state: "ready", url: objectUrl });
       })
       .catch((e: Error) => alive && setLoad({ state: "error", message: e.message }));
     return () => {

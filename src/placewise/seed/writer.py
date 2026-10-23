@@ -91,7 +91,7 @@ def structural_check(r: StructuredResume, c: CandidateFacts) -> list[str]:
                               ("end", want.end_text)):
             if getattr(got, fld).strip() != expected:
                 problems.append(f"job {i} {fld} must be exactly {expected!r} (got {getattr(got, fld)!r})")
-        if not 1 <= len(got.bullets) <= 6:
+        if not 2 <= len(got.bullets) <= 6:
             problems.append(f"job {i} needs 2-5 bullets (got {len(got.bullets)})")
     # Software must come from the facts: flag any known A/E/C tool that isn't the candidate's
     text = r.to_text()

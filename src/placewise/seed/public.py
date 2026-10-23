@@ -71,8 +71,7 @@ def publish(showcase_n: int = 12) -> dict:
     } for c in picked[:showcase_n]]
     dev_ids = {c["candidate_id"] for c in cands if c["split"] == "dev"}
     file_list = [{"candidate_id": f["candidate_id"], "path": f["path"], "file_format": f["file_format"],
-                  "template": f["template"], "bytes": f["bytes"], "has_preview": bool(f.get("preview"))
-                  or f["file_format"] == "pdf",
+                  "template": f["template"], "bytes": f["bytes"],
                   "note": f.get("note", "") if f["candidate_id"] in dev_ids else ""}
                  for f in sorted(files.values(), key=lambda f: f["candidate_id"])]
     job_orders = [{"job_order_id": j["job_order_id"], "title": j["title"], "split": j["split"],

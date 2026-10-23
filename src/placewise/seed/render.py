@@ -186,8 +186,10 @@ def render_pdf(r: dict, c: CandidateFacts, template: str, bullet: str = "•") -
             canv.drawString(MARGIN, 0.3 * inch, INJECTION_TEXT)
             canv.restoreState()
 
+    # invariant=1: no timestamp/random document ID, so the same resume always renders to the same
+    # bytes (hash-based idempotency in ingest depends on this)
     doc = BaseDocTemplate(buf, pagesize=LETTER, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=0.6 * inch,
-                          bottomMargin=0.6 * inch, **meta)
+                          bottomMargin=0.6 * inch, invariant=1, **meta)
     full_w = W - 2 * MARGIN
     fh = H - doc.topMargin - doc.bottomMargin
     if template == "two_column":
@@ -238,7 +240,7 @@ def render_image_pdf(text: str, c: CandidateFacts) -> bytes:
     img.save(png, format="PNG")
     png.seek(0)
     buf = io.BytesIO()
-    cv = rl_canvas.Canvas(buf, pagesize=LETTER)
+    cv = rl_canvas.Canvas(buf, pagesize=LETTER, invariant=1)
     cv.setTitle(f"Scan - {c.full_name}")
     cv.setSubject(SYNTHETIC_NOTE)
     cv.drawImage(ImageReader(png), 0, 0, width=W, height=H)
@@ -370,10 +372,8 @@ def filename_for(c: CandidateFacts, ext: str) -> str:
                        f"{f} {last} Resume (updated).{ext}"])
 
 
-def render_file(resume: dict, text: str, c: CandidateFacts, out_root: Path, bullet: str = "•",
-                template: str | None = None, file_format: str | None = None) -> Rendered:
-    template = template or c.style.template
-    file_format = file_format or c.style.file_format
+def render_file(resume: dict, text: str, c: CandidateFacts, out_root: Path, bullet: str = "•") -> Rendered:
+    template, file_format = c.style.template, c.style.file_format
     note, preview = "", None
     folder = out_root / c.candidate_id
     folder.mkdir(parents=True, exist_ok=True)

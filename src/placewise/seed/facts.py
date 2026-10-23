@@ -383,7 +383,7 @@ def _split_promotions(jobs: list[Job], titles: list[str], total_months: int) -> 
         a, b = idx(job.start), idx(job.end)
         cuts = [cs + m for m in boundaries if a + 6 < cs + m < b - 6]
         if not cuts:
-            job.title = titles[_level((b - cs) / 12)] if job.end else titles[_level((b - cs) / 12)]
+            job.title = titles[_level((b - cs) / 12)]
             out.append(job)
             continue
         edges = [a, *cuts, b]
@@ -410,13 +410,33 @@ def _style(rng: random.Random, years: float) -> Style:
     )
 
 
+def recompute_years(c: "CandidateFacts") -> None:
+    """Years of experience = what the resume's dated jobs actually show (gaps excluded, overlaps merged).
+    Keeps the answer key consistent with the resume after truncation or gap edits."""
+    now = AS_OF.year * 12 + AS_OF.month - 1
+    spans = sorted((int(j.start[:4]) * 12 + int(j.start[5:7]) - 1,
+                    now if j.end is None else int(j.end[:4]) * 12 + int(j.end[5:7]) - 1) for j in c.jobs)
+    total, cur_s, cur_e = 0, None, None
+    for a, b in spans:
+        if cur_e is None or a > cur_e:
+            if cur_e is not None:
+                total += cur_e - cur_s
+            cur_s, cur_e = a, b
+        else:
+            cur_e = max(cur_e, b)
+    if cur_e is not None:
+        total += cur_e - cur_s
+    c.years_experience = round(total / 12 * 2) / 2
+
+
 # ----------------------------------------------------------------------------- tricky cases
 
 def apply_tricky(rng: random.Random, c: CandidateFacts) -> CandidateFacts:
     """Turn a normal candidate into an edge case that is applicable to them."""
     engineering = c.discipline in ("civil", "structural", "mep")
     options = ["career_gap", "short_resume", "long_resume", "unusual_headers", "two_column", "typos"]
-    if engineering and any(x.key == "PE" for x in c.credentials):
+    held_pe = any(x.key == "PE" and x.counts for x in c.credentials)
+    if engineering and held_pe:
         options += ["out_of_state_pe", "expired_license"] * 2
     if engineering and 3 <= c.years_experience <= 8 and not any(x.key == "PE" for x in c.credentials):
         options += ["pursuing_pe"] * 3
@@ -426,10 +446,11 @@ def apply_tricky(rng: random.Random, c: CandidateFacts) -> CandidateFacts:
 
     if kind == "out_of_state_pe":
         st = rng.choice(["OK", "LA", "AR", "NM"])
-        c.credentials = [_cred(rng, "PE", st) if x.key == "PE" else x for x in c.credentials]
+        c.credentials = [_cred(rng, "PE", st) if (x.key == "PE" and x.counts) else x for x in c.credentials]
         c.credentials = list({(x.key, x.state): x for x in c.credentials}.values())
     elif kind == "expired_license":
-        c.credentials = [_cred(rng, "PE", x.state, "expired") if x.key == "PE" else x for x in c.credentials]
+        c.credentials = [_cred(rng, "PE", x.state, "expired") if (x.key == "PE" and x.counts) else x
+                         for x in c.credentials]
     elif kind == "pursuing_pe":
         c.credentials = [x for x in c.credentials if x.key != "EIT"] + [
             _cred(rng, "EIT", c.state if c.state in STATE_NAMES else "TX"),
@@ -529,9 +550,18 @@ def generate(count: int, seed: int = 42) -> list[CandidateFacts]:
             c.tricky.append("poorly_written")
             if rng.random() < 0.6:
                 c.tricky.append("typos")
+    # Duplicates were copied before the messy pass: re-sync style/flags from their source so the
+    # answer key matches the resume text they reuse (exact/format duplicates share the source's text).
+    src_by_person = {p.person_id: p for p in people}
+    for d in extras:
+        src = src_by_person[d.person_id]
+        if d.variant in ("exact_duplicate", "format_duplicate"):
+            d.style.persona = src.style.persona
+            d.tricky = [t for t in src.tricky] + [d.variant]
     allc = people + extras
     for c in allc:
         c.split = split_for(c.person_id, seed)
+        recompute_years(c)
         label_quality(c)
     return allc
 
