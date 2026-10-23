@@ -59,9 +59,11 @@ type Turn = {
 function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     if (e.status === 429) return "Today's AI spend cap has been reached, so Ask is paused until tomorrow. An admin can raise the cap.";
-    if (e.status === 422) return "That question couldn't be processed. Try rephrasing it.";
+    if (e.status === 422) return "That question is too short or too long. Ask in a full sentence (3–2000 characters).";
     return e.message;
   }
+  if (e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError"))
+    return "No answer after 90 seconds (the server may have restarted). Please ask again.";
   return "Can't reach the server. Check your connection and try again.";
 }
 
@@ -299,6 +301,7 @@ export function AskView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q }),
+        signal: AbortSignal.timeout(90_000),   // never leave the chat stuck "pending" if a request dies
       });
       setTurns((t) => t.map((x) => (x.id === id ? { ...x, response } : x)));
     } catch (e) {
