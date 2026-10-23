@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 evals/results/
 .fastembed_cache/
+
+# Seed data: rendered files are rebuilt from data/seed/generated, so not committed
+data/seed/resumes/

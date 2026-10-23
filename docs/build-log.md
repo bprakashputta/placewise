@@ -2,6 +2,11 @@
 
 Real problems hit during the build only: symptom → cause → fix. Newest first.
 
+## 2026-10-22 (Block 1)
+- **Unrealistic career jumps in generated facts.** A sample candidate went from "Engineer in Training" to "Project Manager" with about 2 years of experience. *Cause:* each stint got one title from the person's level at the end of the career, so a long current job carried a senior title back to its start date. *Fix:* split stints at career-level boundaries (`_split_promotions`), so titles progress within the same employer.
+- **"Updated resume" duplicates had a job ending before it started.** Example: a current job starting 2026-07 was closed at 2026-02. *Cause:* `_add_new_job` picked the end date without checking the current job's start. *Fix:* the new job must start at least 3 months after the previous one began; candidates who are too new in their role are skipped for this variant. A consistency check (ordering, overlaps, end ≥ start) now reports 0 problems across 500 candidates.
+- **Tricky-case distribution too thin for key cases.** Only 1 "pursuing PE" in 500, and a median of 12 years' experience (too senior for a recruiting database). *Fix:* mid-career engineers without a PE list PE progress 45% of the time, and the experience distribution was shifted (median now 9.5 years).
+
 ## 2026-10-22 (Block 0)
 - **LangSmith cache tests broke when the clock was patched globally.** Patching `time.monotonic` globally to fake the passage of time also froze the asyncio event loop's clock, which broke `asyncio.wait_for`. *Fix:* patch only `health.py`'s own `time` (`monkeypatch.setattr(health, "time", SimpleNamespace(monotonic=clock))`), leaving asyncio's clock alone.
 - **Reviewer findings (verdict: APPROVE WITH FIXES).** The web proxy forwarded more than `/api/*`, exposing API docs and dev routes through the web origin; `.env.example` was missing variables; there was no `.dockerignore`; a named `node_modules` volume went stale after dependency changes; the Docker healthcheck hit `/docs` (dev-only); there were no tests. *Fix:* rewrite only `/api/*`; filled `.env.example`; added `.dockerignore`; switched to anonymous volumes for `node_modules`/`.next`; added `/livez` for the healthcheck; added 23 tests. *Deferred:* the web image still runs as root, to be fixed in the Block 9 production stage.
