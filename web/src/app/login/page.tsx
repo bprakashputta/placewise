@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Wordmark } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LoginForm } from "./login-form";
@@ -15,7 +16,9 @@ export default function LoginPage() {
         <div className="flex justify-center">
           <Wordmark />
         </div>
-        <LoginForm />
+        <Suspense fallback={<div className="h-72 rounded-xl border bg-card" />}>
+          <LoginForm />
+        </Suspense>
         <p className="text-center text-xs text-muted-foreground">
           Demo build with two roles: Admin and Recruiter. Synthetic data only.
         </p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { ResumeViewer, type ViewerTarget } from "./resume-viewer";
+import { ResumeViewer, type ViewerTarget } from "@/components/resume-viewer";
 
 type Progress = {
   stage: string; status: string; total: number; done: number; ok: number; rejected: number;

@@ -4,6 +4,7 @@ import {
   ClipboardCheck,
   Database,
   FlaskConical,
+  Network,
   LayoutDashboard,
   MessageSquareText,
   Users,
@@ -25,6 +26,7 @@ export const ADMIN_NAV: NavItem[] = [
   { title: "Test data", href: "/seed", icon: Database, badge: "Dev" },
   { title: "Evals", href: "/admin/evals", icon: FlaskConical },
   { title: "AI costs", href: "/admin/costs", icon: CircleDollarSign },
+  { title: "How it works", href: "/admin/architecture", icon: Network },
 ];
 
 export function isActive(pathname: string, href: string) {
