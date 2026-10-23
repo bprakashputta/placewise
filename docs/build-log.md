@@ -2,6 +2,9 @@
 
 Real problems hit during the build only: symptom → cause → fix. Newest first.
 
+## 2026-10-22 (Block 2)
+- **An agent worktree pointer was committed** (`7da7b8d`). `git add -A` picked up `.claude/worktrees/agent-…` (the portal-shell agent's isolated worktree) as an embedded repository. *Fix:* `git rm --cached` plus ignore `.claude/worktrees/` (`ba3470c`). No files were exposed; it was a gitlink pointer only.
+
 ## 2026-10-22 (Block 1)
 - **Unrealistic career jumps in generated facts.** A sample candidate went from "Engineer in Training" to "Project Manager" with about 2 years of experience. *Cause:* each stint got one title from the person's level at the end of the career, so a long current job carried a senior title back to its start date. *Fix:* split stints at career-level boundaries (`_split_promotions`), so titles progress within the same employer.
 - **"Updated resume" duplicates had a job ending before it started.** Example: a current job starting 2026-07 was closed at 2026-02. *Cause:* `_add_new_job` picked the end date without checking the current job's start. *Fix:* the new job must start at least 3 months after the previous one began; candidates who are too new in their role are skipped for this variant. A consistency check (ordering, overlaps, end ≥ start) now reports 0 problems across 500 candidates.

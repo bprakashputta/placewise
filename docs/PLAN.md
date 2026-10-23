@@ -5,7 +5,7 @@ Status: ⬜ not started · 🟨 design proposed · 🟦 in progress · ✅ done
 
 | # | Block | Delivers | Status |
 |---|---|---|---|
-| 0 | **Foundation** | Repo, agent context (AGENTS.md), GitHub, Docker Compose skeleton (db, api health, web hello), `.env` wiring, LangSmith connection check | ✅ built, reviewed, tested, documented; awaiting owner check-in and merge |
+| 0 | **Foundation** | Repo, agent context (AGENTS.md), GitHub, Docker Compose skeleton (db, api health, web hello), `.env` wiring, LangSmith connection check | ✅ merged (tag block-00-done) |
 | 1 | **Synthetic data** | Facts generator (code) → resume text (LLM) → PDF/DOCX; job orders; ground-truth file; tricky cases | ✅ built, reviewed, tested, documented; owner approved merge |
 | 2 | **Ingest pipeline** | DB migrations (schema as versioned migrations); ingest LangGraph (parse PDF/DOCX → extract profile → validate → blind copy → section chunks → Voyage embed → store), Postgres queue + worker, idempotency, LangSmith traces | 🟨 design approved by owner; starts after Block 1 merge |
 | 3 | **Portal shell + auth** | Next.js app shell, login, admin/recruiter roles, Candidates list and profile pages | 🟦 portal shell (frontend only) in progress in parallel on block/03-portal-shell; auth + data wiring after Block 2 |
@@ -19,14 +19,14 @@ Status: ⬜ not started · 🟨 design proposed · 🟦 in progress · ✅ done
 | 11 | Later: **Resume Generator v2** | Separate feature (owner, 2026-10-22): stronger writer model (Sonnet/Opus), more templates and human formatting quirks, visual quality check, "Show hidden text" view for adversarial files; possibly an admin "synthetic data studio" page. Block 1 ships a good-enough v1 so feature work isn't delayed. | ⬜ |
 
 ## Notes
-- **Block 0 close-out (2026-10-22, branch `block/00-foundation` @ `0869213`, not yet merged):**
+- **Block 0 close-out (2026-10-22, branch `block/00-foundation` @ `0869213`, merged (tag block-00-done)):**
   - Design (db + api + web containers; status page with API ✓ DB ✓ LangSmith ✓) approved by the owner in chat; the design is recorded in `docs/modules/foundation.md`.
   - Built in `2fe7061`, reviewer fixes in `dc93a67`, QA tests plus the health-check lock in `4763e12`, docs in `0869213`.
   - Reviewer: APPROVE WITH FIXES, all fixes applied. Deferred: the web image runs as root (moves to Block 9). QA: PASS, 23 tests. UX review: not applicable, since the status page is a placeholder.
   - Done-when checked live: all 3 containers are up, `/api/health` returns 200 with all 3 checks ok, and `/docs`, `/openapi.json`, `/livez` and `/dev/trace` return 404 through :3000. Per the docs, a test trace reached the LangSmith project `placewise`.
   - Known gap: `web` has no Docker healthcheck, so it shows "Up" rather than "healthy".
   - Next: owner check-in → `git merge --no-ff block/00-foundation` → tag `block-00-done`.
-- **Block 1 close-out (2026-10-22, branch `block/01-synthetic-data` @ `ba3470c`, not yet merged; owner said "go ahead" to merge after close-out):**
+- **Block 1 close-out (2026-10-22, branch `block/01-synthetic-data` @ `ba3470c`, merged (tag block-00-done); owner said "go ahead" to merge after close-out):**
   - Design (code facts → LLM writer with fact check → render → job orders + answer key → dev Seed page) approved by the owner in chat; recorded in `docs/modules/synthetic-data.md`. Owner-requested changes during the block: structured resumes, PDF-only showcase, in-page viewer, quality labels for deliberately bad resumes; Resume Generator v2 deferred to item 11.
   - Built in `2d69f13` (A), `e017977` (B), `2759f73`/`d4b4fa9` (C), `3800f47` (D); reviewer + QA fixes in `e6c6795`; docs in `7da7b8d` (module doc, seed pipeline diagram, ADRs 006–009, README); `ba3470c` removed an accidentally committed agent worktree pointer and ignores `.claude/worktrees/`.
   - Reviewer: APPROVE WITH FIXES; all 10 should-fix items fixed (`e6c6795`). Two nits left unfixed and documented in the module doc's known limits (candidate ids reveal generation order; conservative credential patterns). QA: PASS, 126 tests (23 Block 0 + 103 Block 1; command in README and module doc); QA's exact-duplicate-preview bug fixed and its xfail removed.
@@ -37,3 +37,4 @@ Status: ⬜ not started · 🟨 design proposed · 🟦 in progress · ✅ done
   - Next: lead merges `git merge --no-ff block/01-synthetic-data` → tag `block-01-done` → Block 2.
 - The early pre-design scaffold (`src/copilot/`: config, schemas, db, llm) was removed in Block 0. It's kept in git history at commit `8c55933` for reference when building blocks 2–6.
 - The local `.venv` predates the folder rename and is not used. Everything runs in Docker. Safe to delete.
+- 2026-10-22: the owner approved building the Block 3 portal shell (frontend only) in parallel with Block 2, in an isolated worktree on `block/03-portal-shell`, to have the UI sooner for the interview. Auth and data wiring stay in Block 3 after ingest.
