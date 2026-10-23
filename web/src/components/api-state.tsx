@@ -11,6 +11,7 @@ export function ApiErrorState({ error, onRetry }: { error: ApiError; onRetry?: (
       <Card className="py-0">
         <EmptyState
           icon={ShieldAlert}
+          tone="muted"
           title="Admins only"
           description="This page is available to admin accounts. Ask an admin if you need access."
         />
@@ -21,6 +22,7 @@ export function ApiErrorState({ error, onRetry }: { error: ApiError; onRetry?: (
     <Card className="py-0">
       <EmptyState
         icon={CircleAlert}
+        tone="danger"
         title="Couldn't load this data"
         description={error.message}
         action={
