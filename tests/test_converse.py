@@ -25,10 +25,32 @@ def test_quick_route_obvious_one_liners(msg, intent, flavor):
     assert converse.quick_route(msg) == (intent, flavor)
 
 
-@pytest.mark.parametrize("msg", [
-    "hi, any Texas PEs in Houston?", "hey can you find structural engineers", "Texas PEs in DFW",
+REAL_REQUESTS = [
+    "hi, any Texas PEs in Houston?", "PMP", "hey can you find structural engineers", "Texas PEs in DFW",
     "which of them have PMP?", "who fits JO-03?", "hello " * 10,
-])
+]
+
+
+@pytest.mark.parametrize("msg", ["sssssss", "asdf", "???", "...", "qwertyu"])
+def test_quick_route_catches_gibberish(msg):
+    assert converse.quick_route(msg) == ("unclear", "")
+
+
+def test_model_small_talk_reply_is_used_and_never_searches(monkeypatch):
+    async def go():
+        async def boom(*a, **k):
+            raise AssertionError("must not search")
+        monkeypatch.setattr(converse, "run_rag", boom)
+        monkeypatch.setattr(converse, "route", _route(converse.Route(intent="greeting", reply="Doing well, thanks!")))
+        out = await converse.respond("how are you doing", [], RECRUITER, None)
+        assert out["kind"] == "greeting" and out["content"] == "Doing well, thanks!"
+        monkeypatch.setattr(converse, "route", _route(converse.Route(intent="unclear")))
+        out = await converse.respond("zzzx", [], RECRUITER, None)
+        assert out["kind"] == "off_topic" and "didn't catch" in out["content"] or "not sure" in out["content"]
+    asyncio.run(go())
+
+
+@pytest.mark.parametrize("msg", REAL_REQUESTS)
 def test_quick_route_leaves_real_requests_to_the_model(msg):
     assert converse.quick_route(msg) is None
 
@@ -48,7 +70,7 @@ def test_first_greeting_of_the_day_has_context_and_suggestions():
 
 def test_later_greetings_are_short():
     text, _ = converse.greeting_reply("hello", "Demo", False, None, datetime(2026, 10, 23, 15), None)
-    assert text == "Hi Demo! What would you like to find?"
+    assert "Demo" in text and len(text) < 90 and "job orders" not in text      # short, varied, no status dump
     assert converse.greeting_reply("thanks", "Demo", True, CTX, datetime.now(), None)[0].startswith("You're welcome")
 
 

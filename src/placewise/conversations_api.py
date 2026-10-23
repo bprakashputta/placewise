@@ -108,6 +108,7 @@ async def send_message(conv_id: int, body: NewMessage, user: dict = Depends(curr
         conv = await _get_conv(conn, conv_id, user["id"])
         history = await _messages(conn, conv_id)
     jo = await load_job_order(conv["job_order_id"])
+    had_search = any(m["kind"] in ("search", "follow_up", "job_order") for m in history)
     try:
         reply = await respond(body.content, history, user, jo)
     except SpendCapReached as e:
@@ -127,10 +128,11 @@ async def send_message(conv_id: int, body: NewMessage, user: dict = Depends(curr
                  json.dumps(reply["response"], default=str) if reply["response"] is not None else None,
                  reply["suggestions"], reply["person_ids"], reply["cost_usd"]))
             bot_msg = await cur.fetchone()
-            # Title: the first real question (greetings don't rename the chat)
+            # Title: the first message names the chat; the first real question replaces a small-talk title
+            is_search = reply["kind"] in ("search", "follow_up", "job_order")
             new_title = body.content[:60] + ("…" if len(body.content) > 60 else "")
             await conn.execute(
                 """UPDATE conversations SET last_message_at = now(),
-                       title = CASE WHEN title = 'New chat' AND job_order_id IS NULL AND %s THEN %s ELSE title END
-                   WHERE id = %s""", (reply["kind"] in ("search", "follow_up", "job_order"), new_title, conv_id))
+                       title = CASE WHEN job_order_id IS NULL AND (title = 'New chat' OR %s) THEN %s ELSE title END
+                   WHERE id = %s""", (is_search and not had_search, new_title, conv_id))
     return {"user_message": _public(user_msg), "assistant_message": _public(bot_msg)}

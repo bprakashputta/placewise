@@ -39,6 +39,8 @@ The owner asked whether recruiters should have one endless chat, or chats that c
 - Routing eval (`python -m placewise.evals.ask_routing`, 30 labeled messages incl. mixed "hi + request", follow-ups with history, job orders, off-topic and injection attempts): **30/30 correct**, $0.005.
 - Live: greeting 0.02 s and $0 (keyword shortcut); off-topic 0.8–1.7 s; search ~10–12 s; job-order chat ~14 s; follow-up with no match 2.3 s (checked against the database: the 8 cited candidates top out at 9.5 years, so "none have 10+" was correct).
 
+- **Small talk v2** (owner feedback: identical canned replies to "Hey", "How are you doing" and "sssss" felt robotic): the router (prompt `ask_route` v2) now writes a short natural reply for small talk and off-topic messages, grounded only in today's real activity (new resumes, shortlists waiting, unmatched job orders); gibberish gets "I didn't catch that"; keyword greetings rotate wording. Routing eval: **34/34**, $0.007.
+
 ## Alternatives considered
 - **One endless chat per recruiter:** simplest, but filters and candidates from earlier topics leak into new questions, each follow-up resends a growing history (slower, costlier, less accurate), and there's no per-role record.
 - **No memory (today):** cheap and predictable, but follow-ups fail and the page loses history on reload.

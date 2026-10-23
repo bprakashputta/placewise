@@ -11,6 +11,7 @@ run yet, new resumes today), so they are free, instant and can't make things up.
 """
 from __future__ import annotations
 
+import random
 import re
 import time
 from datetime import datetime
@@ -30,12 +31,12 @@ from ..promptlib import load
 from .answer import _cost, _structured
 from .graph import ask as run_rag
 
-ROUTE_PROMPT_VERSION = 1
+ROUTE_PROMPT_VERSION = 2
 LOCAL_TZ = ZoneInfo("America/Chicago")   # the firm is in DFW; "today" and "good morning" follow local time
 HISTORY_TURNS = 6
 SEARCH_KINDS = ("search", "follow_up", "job_order")
 
-Intent = Literal["greeting", "help", "search", "follow_up", "job_order", "off_topic"]
+Intent = Literal["greeting", "help", "search", "follow_up", "job_order", "off_topic", "unclear"]
 
 
 class Route(BaseModel):
@@ -43,6 +44,7 @@ class Route(BaseModel):
     standalone_question: str = Field("", description="Complete standalone question for search kinds, else ''")
     scope: Literal["previous_candidates", "all"] = "all"
     job_order_id: int | None = None
+    reply: str = Field("", description="Only for greeting/off_topic: a short natural reply, else ''")
 
 
 # ---------- routing ----------
@@ -66,6 +68,8 @@ def quick_route(message: str) -> tuple[Intent, str] | None:
         return "greeting", "bye"
     if re.fullmatch(r"(help|\?|what can you do\??|how does this work\??|what do you do\??)", t):
         return "help", ""
+    if re.fullmatch(r"[^a-z0-9]*|(.)\1{3,}|[asdfghjkl;]{4,}|[qwertyuiop]{5,}", t):   # "sssss", "asdf", "???"
+        return "unclear", ""
     return None
 
 
@@ -97,6 +101,15 @@ def _job_order_context(jo: dict | None) -> str:
             f"({spec.get('metro') or 'location not set'}). Must-haves: {'; '.join(musts) or 'none listed'}.")
 
 
+def today_text(ctx: dict | None) -> str:
+    if not ctx:
+        return "(not available)"
+    facts = [f"{ctx['new_today']} new resumes processed today", f"{ctx['to_review']} job orders with a shortlist "
+             f"waiting for review", f"{ctx['no_run']} open job orders with no candidates matched yet",
+             f"{ctx['attention']} resumes that couldn't be read", f"{ctx.get('candidates', 0)} candidates in the pool"]
+    return "; ".join(facts)
+
+
 async def route(message: str, history: list[dict], jo: dict | None) -> tuple[Route, dict]:
     quick = quick_route(message)
     if quick:
@@ -105,9 +118,14 @@ async def route(message: str, history: list[dict], jo: dict | None) -> tuple[Rou
     p = load("ask_route", ROUTE_PROMPT_VERSION)
     t0 = time.perf_counter()
     try:
+        ctx = await _today_context()
+    except Exception:
+        ctx = None
+    try:
         out = await _structured(p["model"], Route).ainvoke(
             [SystemMessage(p["system"]), HumanMessage(p["user"].format(
-                history=_history_text(history), job_order_context=_job_order_context(jo), message=message[:2000]))],
+                history=_history_text(history), job_order_context=_job_order_context(jo), today=today_text(ctx),
+                message=message[:2000]))],
             config={"run_name": "route_message", "tags": ["ask", "route"]})
         r: Route | None = out.get("parsed")
         usage = getattr(out.get("raw"), "usage_metadata", None) or {}
@@ -146,7 +164,8 @@ async def _today_context() -> dict:
                  (SELECT count(*) FROM resume_files WHERE status='processed'
                     AND processed_at >= (date_trunc('day', now() AT TIME ZONE 'America/Chicago')
                                          AT TIME ZONE 'America/Chicago')) AS new_today,
-                 (SELECT count(*) FROM resume_files WHERE status='needs_attention') AS attention""")
+                 (SELECT count(*) FROM resume_files WHERE status='needs_attention') AS attention,
+                 (SELECT count(*) FROM current_candidates) AS candidates""")
         return await cur.fetchone()
 
 
@@ -172,7 +191,10 @@ def greeting_reply(flavor: str, first_name: str, first_today: bool, ctx: dict | 
         return "Talk soon! Your chats are saved here whenever you come back.", []
     role_hint = (f" We're working on **{jo['spec'].get('title')}** (JO-{jo['id']:02d})." if jo else "")
     if not first_today or not ctx:
-        text = f"Hi {first_name}!{role_hint} What would you like to find?"
+        text = random.choice([f"Hi {first_name}!{role_hint} What would you like to find?",
+                              f"Hey {first_name}!{role_hint} Who are we looking for?",
+                              f"Hi again, {first_name}!{role_hint} What can I dig up for you?",
+                              f"Hello {first_name}!{role_hint} Tell me the role, license or skills you need."])
         sugg = ([f"Who are the top candidates for this role?"] if jo else
                 ["Texas PEs in DFW with drainage experience", "What can you do?"])
         return text, sugg
@@ -205,6 +227,10 @@ HELP_TEXT = """I search your candidates' resumes and answer with citations to th
 - **Compare candidates:** "compare the top two on hospital experience"
 
 Licenses, years and locations are checked by code against the resumes, and every quote is verified. I never share contact details."""
+
+UNCLEAR_TEXTS = ["Sorry, I didn't catch that. Try asking about a role, license, location or skill.",
+                 "Hmm, I'm not sure what you meant. You could ask something like \"structural engineers in Houston "
+                 "with a Texas PE\"."]
 
 OFF_TOPIC_TEXT = ("I can only help with your candidates and job orders, for example "
                   "\"structural engineers in Houston with a Texas PE\". I also never share contact details "
@@ -249,6 +275,14 @@ async def respond(message: str, history: list[dict], user: dict, conv_jo: dict |
     cost = meta["cost_usd"]
     first_name = (user.get("display_name") or user.get("username") or "there").split()[0]
 
+    if r.intent == "unclear":
+        return {"kind": "off_topic", "content": random.choice(UNCLEAR_TEXTS), "response": None,
+                "suggestions": ["What can you do?", "Texas PEs in DFW with drainage experience"], "person_ids": [],
+                "cost_usd": cost}
+    if r.intent in ("greeting", "off_topic") and r.reply.strip():   # model-written small talk, grounded in today
+        return {"kind": r.intent, "content": r.reply.strip(), "response": None,
+                "suggestions": ["Texas PEs in DFW with drainage experience"] if r.intent == "off_topic" else [],
+                "person_ids": [], "cost_usd": cost}
     if r.intent == "greeting":
         first = meta.get("flavor") == "hello" and await _first_chat_today(user["id"])
         ctx = await _today_context() if first else None
