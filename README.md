@@ -40,6 +40,18 @@ Open **http://localhost:3000**. It goes to the dashboard if you're signed in, ot
 
 All ports bind to `127.0.0.1`. The database isn't published to the host.
 
+## Public demo link (Cloudflare quick tunnel)
+Same features as local, reachable over HTTPS without a domain:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.public.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.public.yml logs tunnel | grep trycloudflare
+```
+- The web app runs as a production build; cookies are HTTPS-only; the login rate limit uses Cloudflare's client IP.
+- Everything works as it does locally, except **Reset ingested data**, which is disabled so the shared demo can't be wiped.
+- The daily AI spend cap is `PUBLIC_DAILY_LLM_SPEND_CAP_USD` (default $30).
+- The address is random and changes when the tunnel restarts; the Mac must stay on and awake.
+- Back to local development: `docker compose up -d --build` (dev server with hot reload).
+
 ## Synthetic data (seed CLI)
 Runs in the on-demand `seed` tools container. `write`, `samples` and `job-orders` call Claude Haiku 5.5 and need `PLACEWISE_ANTHROPIC_TEST_API_KEY` (a full run costs under $1).
 

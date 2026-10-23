@@ -1,0 +1,37 @@
+# Public demo link through a Cloudflare quick tunnel (no domain needed). Same features as local.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.public.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.public.yml logs tunnel | grep trycloudflare
+#
+# Differences from local: the web app is a production build (faster, no dev overlay), cookies are
+# HTTPS-only, the login rate limit uses Cloudflare's client IP, uvicorn runs without --reload, and the
+# destructive "Reset ingested data" action is disabled so the shared demo can't be wiped. The quick
+# tunnel's address is random and changes when the tunnel restarts.
+services:
+  api:
+    environment:
+      COOKIE_SECURE: "true"
+      TRUST_CLOUDFLARE_IP: "true"
+      PUBLIC_DEMO: "true"
+      DAILY_LLM_SPEND_CAP_USD: ${PUBLIC_DAILY_LLM_SPEND_CAP_USD:-30}
+    command: ["uvicorn", "placewise.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "75"]
+
+  worker:   # uploads are processed here: same spend cap as the api, or uploads would stop earlier
+    environment:
+      DAILY_LLM_SPEND_CAP_USD: ${PUBLIC_DAILY_LLM_SPEND_CAP_USD:-30}
+
+  web:
+    build:
+      target: prod
+      args:
+        API_INTERNAL_URL: http://api:8000
+    environment:
+      NODE_ENV: production
+    volumes: !reset []
+
+  tunnel:
+    image: cloudflare/cloudflared:2025.8.1
+    command: ["tunnel", "--no-autoupdate", "--url", "http://web:3000"]
+    depends_on:
+      - web
+    restart: unless-stopped

@@ -168,3 +168,15 @@ def test_duplicate_verdicts_keep_only_the_first(monkeypatch):
     ])
     rows = [v for v in out["verdicts"] if v["requirement"] == "HEC-RAS modeling"]
     assert len(rows) == 1 and rows[0]["verdict"] == "met"
+
+
+def test_reset_is_disabled_on_the_public_demo(load_app, monkeypatch):
+    from placewise.config import get_settings
+    main, client = load_app("dev")
+    main.app.dependency_overrides[auth.current_user] = lambda: {**RECRUITER, "role": "admin"}
+    monkeypatch.setattr(get_settings(), "public_demo", True)
+    try:
+        r = client.post("/api/dev/ingest/reset", params={"confirm": "yes"})
+        assert r.status_code == 403 and "public demo" in r.json()["detail"]
+    finally:
+        main.app.dependency_overrides.clear()
