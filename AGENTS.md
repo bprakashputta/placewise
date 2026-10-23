@@ -22,6 +22,27 @@ Full brief: `docs/PROJECT_BRIEF.md`. Build plan and status: `docs/PLAN.md`.
 7. **Never change the machine** (installs, databases, deleting files) or **send anything external** (emails, posts) without explicit approval.
 8. **Honesty:** the build log records only problems that actually happened. Don't invent metrics or results.
 
+## Team roles and block workflow
+Role definitions live in `.claude/agents/`. Other tools can read the same files as plain role prompts.
+
+| Role | File | Job |
+|---|---|---|
+| **Lead / architect / builder** | (main session) | Proposes each block's design, builds after approval, launches the other roles, talks to the owner |
+| **Reviewer** | `reviewer.md` | Independent, read-only code review against the design and this file |
+| **QA tester** | `qa-tester.md` | Runs tests, verifies "done when", tries to break it, adds tests |
+| **UX reviewer** | `ux-reviewer.md` | Reviews UI blocks from a recruiter's and an admin's view |
+| **Docs maintainer** | `docs-maintainer.md` | Keeps module docs, Mermaid/UML diagrams, ADRs, build log and prompts in sync with the code |
+| **Coordinator** | `coordinator.md` | Session-start status, end-of-block close-out checklist, owns status in `docs/PLAN.md`, flags drift |
+
+Every block follows this sequence:
+```
+Coordinator status → Lead proposes design → OWNER APPROVES → Lead builds → Reviewer → fixes
+→ QA tester → fixes → UX reviewer (UI blocks) → fixes → Docs maintainer → Coordinator close-out
+→ commit → CHECK-IN WITH OWNER → next block
+```
+- Subagents can't launch other agents, so the lead launches each role.
+- Run parallel builders only for truly independent pieces, each in its own git worktree, and only with the owner's OK.
+
 ## Architecture (agreed)
 - **Docker Compose** services: `web` (Next.js App Router + Tailwind + shadcn/ui, light/dark), `api` (FastAPI, stateless), `worker` (runs LangGraph jobs from a Postgres `SKIP LOCKED` queue, scales horizontally), `db` (Postgres 17 + pgvector), `n8n`, `mailpit` (local test inbox), and optional `tunnel` (Cloudflare quick tunnel for a temporary public link).
 - **LangChain** for model wrappers, structured output, prompts, embeddings and the PGVector store and retrievers.
