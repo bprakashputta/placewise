@@ -15,7 +15,7 @@ export default function Home() {
       </header>
       <SystemStatus />
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <a href="/seed" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+        <a href="/admin/test-data" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
           View synthetic seed data (dev) →
         </a>
         <Link href="/dashboard" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
