@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import "./ask.css";
 import { AskView } from "./ask-view";
 
 export const metadata: Metadata = { title: "Ask" };
@@ -10,9 +11,12 @@ export default function AskPage() {
   return (
     <Suspense
       fallback={
-        <div className="space-y-6" aria-busy="true">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-[32rem] rounded-xl" />
+        <div data-ask-workspace className="flex h-[calc(100svh-3.5rem)] w-full" aria-busy="true">
+          <div className="hidden w-[248px] shrink-0 space-y-3 border-r p-3 lg:block">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+          <div className="flex-1" />
         </div>
       }
     >

@@ -1,0 +1,10 @@
+/*
+ * The portal shell pads and centers page content; the Ask workspace runs edge to edge under the
+ * top bar instead (its height is set on the element). Scoped to the workspace's direct parent.
+ */
+:where(*):has(> [data-ask-workspace]) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+}
