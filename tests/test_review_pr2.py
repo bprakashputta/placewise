@@ -158,3 +158,13 @@ def test_verdicts_with_changed_requirement_text_are_flagged_not_silently_dropped
     assert _v(out, "Texas PE license")["verdict"] == "met"
     assert not any(v["requirement"] == "HEC-RAS modelling experience" for v in out["verdicts"])
     assert "1 AI verdict(s) ignored: requirement text didn't match the job order" in out["flags"]
+
+
+def test_duplicate_verdicts_keep_only_the_first(monkeypatch):
+    q = "Built HEC-RAS 2D models for the Brays Bayou channel"
+    out = _run_assess(monkeypatch, [
+        RequirementVerdict(requirement="HEC-RAS modeling", verdict="met", evidence=q),
+        RequirementVerdict(requirement="HEC-RAS modeling", verdict="not_met", evidence=None),
+    ])
+    rows = [v for v in out["verdicts"] if v["requirement"] == "HEC-RAS modeling"]
+    assert len(rows) == 1 and rows[0]["verdict"] == "met"

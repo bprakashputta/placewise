@@ -242,11 +242,14 @@ async def assess(spec: JobSpec, prof: dict, sem: asyncio.Semaphore, run_id: str)
             flags, summary = list(a.flags), a.summary
             text = _norm(prof.get("blind_text") or "")
             soft_texts = {r.text for r in soft}
-            dropped = 0
+            dropped, seen = 0, set()
             for v in a.verdicts:
                 if v.requirement not in soft_texts:   # code-decided, or text the model changed: never trusted
                     dropped += v.requirement not in code
                     continue
+                if v.requirement in seen:             # one verdict per requirement (the first), as score() counts
+                    continue
+                seen.add(v.requirement)
                 ev = _norm(v.evidence or "")
                 if v.verdict in ("met", "partial"):
                     # A positive verdict needs a real quote: present, long enough not to match by accident
