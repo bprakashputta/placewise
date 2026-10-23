@@ -186,7 +186,7 @@ def _cred_text(rng: random.Random, key: str, state: str | None, status: str, num
         "NCARB": ["NCARB Certificate"],
         "NCIDQ": [f"NCIDQ Certificate #{number}", "NCIDQ Certified"],
         "TX_RID": [f"Registered Interior Designer, Texas (RID #{number})"],
-        "LEED_AP": ["LEED AP BD+C", "LEED AP ID+C", "LEED Accredited Professional (BD+C)"],
+        "LEED_AP": ["LEED AP BD+C", "LEED Accredited Professional (BD+C)"],
         "LEED_GA": ["LEED Green Associate", "LEED GA"],
         "PMP": ["PMP", "Project Management Professional (PMP)"],
         "CCM": ["Certified Construction Manager (CCM)"],
@@ -195,10 +195,12 @@ def _cred_text(rng: random.Random, key: str, state: str | None, status: str, num
     return rng.choice(variants) + suffix
 
 
-def _cred(rng, key, state=None, status="active") -> Credential:
+def _cred(rng, key, state=None, status="active", discipline: str | None = None) -> Credential:
     number = str(rng.randint(100000, 159999)) if key in ("PE", "RA", "NCIDQ", "TX_RID") else None
-    return Credential(key=key, state=state, status=status, number=number,
-                      text=_cred_text(rng, key, state, status, number), counts=status == "active")
+    text = _cred_text(rng, key, state, status, number)
+    if key == "LEED_AP" and discipline == "interior_design":
+        text = rng.choice(["LEED AP ID+C", "LEED Accredited Professional (ID+C)"])  # interiors specialty
+    return Credential(key=key, state=state, status=status, number=number, text=text, counts=status == "active")
 
 
 def _pick_state(rng, home_state: str) -> str:
@@ -310,7 +312,7 @@ def make_candidate(rng: random.Random, fake: Faker, cid: str, pid: str,
                 creds.append(_cred(rng, "TX_RID", "TX"))
         r = rng.random()
         if r < 0.25:
-            creds.append(_cred(rng, "LEED_AP"))
+            creds.append(_cred(rng, "LEED_AP", discipline="interior_design"))
         elif r < 0.4:
             creds.append(_cred(rng, "LEED_GA"))
     else:  # construction management
