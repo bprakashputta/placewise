@@ -6,7 +6,7 @@ purpose: >
   seed generator (Block 1). It never sees the answer key's derived labels.
 output: Plain-text resume with simple Markdown (headings and bullets). No commentary.
 changelog:
-  - "v1 (2026-10-22): initial version."
+  - "v1 (2026-10-22): initial version (free text)."
 
 system: |
   You write realistic resumes for architecture, engineering and construction professionals.

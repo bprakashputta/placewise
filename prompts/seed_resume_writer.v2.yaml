@@ -6,7 +6,7 @@ purpose: >
   seed generator (Block 1). It never sees the answer key's derived labels.
 output: Plain-text resume with simple Markdown (headings and bullets). No commentary.
 changelog:
-  - "v1 (2026-10-22): initial version."
+  - "v1 (2026-10-22): initial version (free text)."
   - "v2 (2026-10-22): omit empty sections. v1 wrote 'Licenses & Certifications - None listed.', which real resumes never do (seen in a review of the first 10 outputs)."
 
 system: |

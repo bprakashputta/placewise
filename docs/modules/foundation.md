@@ -56,7 +56,7 @@ Secrets live only in `.env` (gitignored); `.env.example` lists the names. Compos
 | `APP_ENV` | `APP_ENV` | Compose default `dev`; **code default `prod`**; only `dev`/`prod` accepted |
 | `APP_SECRET_KEY` | `APP_SECRET_KEY` | Required (compose fails fast if empty). `openssl rand -hex 32` |
 | `POSTGRES_PASSWORD` | `DATABASE_URL=postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise` | Required. URL-safe chars only: `openssl rand -hex 24` |
-| `PLACEWISE_ANTHROPIC_TEST_API_KEY` | `ANTHROPIC_API_KEY` | Not used yet in Block 0 |
+| `PLACEWISE_ANTHROPIC_TEST_API_KEY` | `ANTHROPIC_API_KEY` | Not used in Block 0; Block 1's `seed` container uses it to write synthetic resumes |
 | `PLACEWISE_VOYAGE_TEST_API_KEY` | `VOYAGE_API_KEY` | Not used yet in Block 0 |
 | `PLACEWISE_LANGSMITH_TEST_API_KEY` | `LANGSMITH_API_KEY` | Used by the health check and tracing |
 | `LANGSMITH_ENDPOINT`, `LANGSMITH_TRACING`, `LANGSMITH_PROJECT` | same | Defaults: official endpoint, `true`, `placewise` |
@@ -76,9 +76,11 @@ open http://localhost:3000    # System status page
 
 ## How to test
 ```bash
-docker compose run --rm -v "$PWD/tests:/app/tests" api pytest -q /app/tests
+docker compose run --rm -T -v "$PWD/tests:/app/tests" --entrypoint pytest seed -q -p no:cacheprovider /app/tests
 ```
-**23 tests, all passing** (QA verdict: PASS). They never touch the real db or LangSmith: `conftest.py` sets a fake env before import, and checks are mocked.
+This runs the whole suite (126 tests as of Block 1) in the `seed` tools container, which uses the same image as the api. `docker compose exec api uv run pytest` doesn't work: the api image's `/opt/venv` isn't writable and the tests aren't mounted there.
+
+**Block 0 has 23 tests, all passing** (QA verdict: PASS). They never touch the real db or LangSmith: `conftest.py` sets a fake env before import, and checks are mocked.
 
 | File | Covers |
 |---|---|

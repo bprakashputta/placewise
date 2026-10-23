@@ -34,10 +34,11 @@ flowchart TB
 | Service | Container port | Host port | Volumes | Starts after | Healthcheck |
 |---|---|---|---|---|---|
 | `db` | 5432 | **none** (host Postgres owns 5432; optional `127.0.0.1:5433` for debugging) | `db_data` → `/var/lib/postgresql/data`; `./docker/db/init` → `/docker-entrypoint-initdb.d` (ro) | — | `pg_isready` every 5s |
-| `api` | 8000 | `127.0.0.1:8000` | `./src` → `/app/src` (dev reload) | `db` healthy | `GET /livez` every 10s (image `HEALTHCHECK`) |
+| `api` | 8000 | `127.0.0.1:8000` | `./src` → `/app/src` (dev reload); read-only: `./data/seed/public`, `./data/seed/resumes`, `./outputs/samples` (never `data/seed/truth`) | `db` healthy | `GET /livez` every 10s (image `HEALTHCHECK`) |
+| `seed` | — | none | `./src`, `./data` (incl. `seed/truth`), `./outputs`; `./prompts` read-only | on demand (`docker compose run --rm seed …`, profile `tools`) | n/a (one-shot; exits when done) |
 | `web` | 3000 | `127.0.0.1:3000` | `./web` → `/app`; anonymous `/app/node_modules`, `/app/.next` | `api` started | none |
 
-All services use `restart: unless-stopped`.
+All long-running services use `restart: unless-stopped`. `seed` is a one-shot tools container (Block 1), see [Synthetic data](../modules/synthetic-data.md).
 
 ## Notes
 - The api's virtualenv lives in `/opt/venv`, outside `/app/src`, so mounting `./src` for reload doesn't hide installed packages.

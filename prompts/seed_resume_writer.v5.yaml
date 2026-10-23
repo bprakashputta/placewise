@@ -8,10 +8,10 @@ purpose: >
 output: StructuredResume (Pydantic), via LangChain with_structured_output.
 changelog:
   - "v1 (2026-10-22): initial version (free text)."
-  - "v2 (2026-10-22): omit empty sections."
-  - "v3 (2026-10-22): style hints moved into YAML; no layout labels."
-  - "v5 (2026-10-22): adds a 'messy' persona for deliberately poorly written resumes (about 8%, labeled 'flawed' in the answer key), so weak resumes are intentional and measurable."
+  - "v2 (2026-10-22): omit empty sections. v1 wrote 'Licenses & Certifications - None listed.', which real resumes never do (seen in a review of the first 10 outputs)."
+  - "v3 (2026-10-22): style hints moved from Python into this file. The two-column hint no longer says 'Sidebar' (the model printed 'SIDEBAR' / 'MAIN COLUMN' as literal text). Rule 7 forbids layout labels."
   - "v4 (2026-10-22): structured output instead of free text. The owner found v3 resumes looked poor: projects listed as bare bullets, thin jobs, an odd 'Sectors' section, and layouts broken by heading-guessing. v4 requires 2-5 accomplishment bullets per job with projects woven in, sectors in the summary, and headings chosen per header style."
+  - "v5 (2026-10-22): adds a 'messy' persona for deliberately poorly written resumes (about 8%, labeled 'flawed' in the answer key), so weak resumes are intentional and measurable. Current version used by the writer."
 
 system: |
   You write realistic, polished resumes for architecture, engineering and construction professionals.
