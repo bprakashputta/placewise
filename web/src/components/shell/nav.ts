@@ -1,4 +1,5 @@
 import {
+  Activity,
   BriefcaseBusiness,
   CircleDollarSign,
   ClipboardCheck,
@@ -27,6 +28,7 @@ export const ADMIN_NAV: NavItem[] = [
   { title: "Evals", href: "/admin/evals", icon: FlaskConical },
   { title: "AI costs", href: "/admin/costs", icon: CircleDollarSign },
   { title: "How it works", href: "/admin/architecture", icon: Network },
+  { title: "System status", href: "/admin/system", icon: Activity },
 ];
 
 export function isActive(pathname: string, href: string) {
