@@ -42,3 +42,9 @@ Display rules for the UI:
 - Credentials always show their **quote** (the exact resume text) as evidence, plus the status (active,
   pursuing, exam_scheduled, expired). Only "active" counts toward license_codes.
 - Never show email/phone (the API doesn't return them).
+
+## Ask (RAG) and smart search (Block 5)
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/ask` | body `{"question": str, "filters"?: {discipline, metro, license_codes[], min_years}}` → `{"question", "answer" (markdown), "citations": [{chunk_id, person_id, resume_file_id, candidate_name, section, quote}], "candidates": [{person_id, full_name, headline, discipline, metro, city, years_experience, license_codes[], quality, score, top_sections[{chunk_id, section, content}]}], "plan": {"filters": {...}, "search_query"}, "dropped_citations": [str], "timings_ms": {understand_ms, retrieve_ms, rerank_ms, answer_ms, total_ms}, "cost_usd"}` · 429 when the daily AI spend cap is reached. Takes ~10–15 s. |
+| GET | `/api/search?q=&discipline=&metro=&license=&min_years=&limit=20` | No LLM, ~0.5 s: `{"query", "items": [{person_id, full_name, headline, discipline, metro, years_experience, license_codes[], quality, score, match}]}` |
