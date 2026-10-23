@@ -1,53 +1,38 @@
-"""Write resume text from facts with an LLM (LangChain + Claude Haiku), then fact-check it.
+"""Write structured resumes from facts with an LLM (LangChain + Claude Haiku), then fact-check them.
 
-Flow per candidate: prompt → resume text → fact check → if problems, retry with the problems
-fed back (max 2 retries) → accepted text, or a rejection recorded in the results.
-Runs many candidates concurrently with a cap, and tracks tokens and cost.
+Flow per candidate: prompt → StructuredResume (validated by Pydantic) → structural check
+(each job's title, employer and dates match the facts exactly) + text fact check (nothing
+missing, no invented credentials) → if problems, retry with them listed (max 2 retries).
+Runs concurrently with a cap and tracks tokens and cost.
 """
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import dataclass, field
 
 from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from . import prompts
 from .facts import CandidateFacts
-from .factcheck import check, must_include
+from .factcheck import check
+from .catalog import SOFTWARE
+from .resume_schema import StructuredResume
 
-PROMPT_NAME, PROMPT_VERSION = "seed_resume_writer", 2
+ALL_SOFTWARE = {sw for tools in SOFTWARE.values() for sw in tools}
+
+PROMPT_NAME, PROMPT_VERSION = "seed_resume_writer", 4
 # USD per 1M tokens for claude-haiku-5-5 (platform.claude.com/docs pricing, checked 2026-10-22)
 PRICE_IN, PRICE_OUT = 0.10, 0.50
-
-PERSONA = {
-    "concise": "terse and bullet-heavy; short bullets, no fluff",
-    "narrative": "flowing sentences; a short summary paragraph and descriptive bullets",
-    "senior_exec": "senior leader; executive summary, leadership and client relationships emphasized",
-    "junior_academic": "early-career; education near the top, internships or academic projects framed as experience",
-    "technical_detail": "technical; tools, methods and design responsibilities emphasized",
-}
-LENGTH = {"short": "about 200-300 words", "medium": "about 400-550 words", "long": "about 700-900 words"}
-HEADERS = {
-    "standard": "conventional (Summary, Experience, Education, Licenses & Certifications, Skills)",
-    "caps": "ALL CAPS conventional headings (PROFESSIONAL EXPERIENCE, EDUCATION, ...)",
-    "unusual": "unconventional headings (e.g. 'Where I've Worked', 'Registrations', 'Toolbox', 'Selected Work')",
-}
-LAYOUT = {
-    "classic": "one column, contact block at top",
-    "modern": "one column, skills listed near the top",
-    "two_column": "write a 'Sidebar' section first (contact, skills, credentials) then the main column",
-    "ats_plain": "very plain, no decoration, simple dashes for bullets",
-    "compact": "dense; combine short sections",
-}
 
 
 @dataclass
 class WriteResult:
     candidate_id: str
-    text: str | None = None
+    resume: StructuredResume | None = None
     attempts: int = 0
     problems: list[str] = field(default_factory=list)
     input_tokens: int = 0
@@ -56,7 +41,11 @@ class WriteResult:
 
     @property
     def ok(self) -> bool:
-        return self.text is not None
+        return self.resume is not None
+
+    @property
+    def text(self) -> str | None:
+        return self.resume.to_text() if self.resume else None
 
     @property
     def cost_usd(self) -> float:
@@ -76,67 +65,91 @@ def facts_for_writer(c: CandidateFacts) -> dict:
                                for p in j.projects]} for j in c.jobs],
         "credentials": [cr.text for cr in c.credentials],
         "software": c.software, "sectors": c.sectors,
-        "education": [{"degree": e.degree, "school": e.school, "year": e.year} for e in c.education],
+        "education": [{"degree": e.degree, "school": e.school, "year": str(e.year)} for e in c.education],
     }
 
 
-def build_messages(c: CandidateFacts) -> list:
+def build_messages(c: CandidateFacts, feedback: list[str] | None = None) -> list:
     p = prompts.load(PROMPT_NAME, PROMPT_VERSION)
+    h = p["style_hints"]
     user = p["user"].format(
-        persona_hint=PERSONA[c.style.persona], length_hint=LENGTH[c.style.length],
-        header_hint=HEADERS[c.style.header_style], layout_hint=LAYOUT[c.style.template],
-        must_include="\n  ".join(f"- {s}" for s in must_include(c)),
-        facts_json=json.dumps(facts_for_writer(c), indent=1),
-    )
+        persona_hint=h["persona"][c.style.persona], length_hint=h["length"][c.style.length],
+        header_hint=h["headers"][c.style.header_style], facts_json=json.dumps(facts_for_writer(c), indent=1))
+    if feedback:
+        user += ("\n\nA previous attempt failed these checks. Fix every one:\n- " + "\n- ".join(feedback[:12]))
     return [SystemMessage(p["system"]), HumanMessage(user)]
 
 
-def _text_of(msg: AIMessage) -> str:
-    if isinstance(msg.content, str):
-        return msg.content.strip()
-    return "".join(b.get("text", "") for b in msg.content if isinstance(b, dict)).strip()
+def structural_check(r: StructuredResume, c: CandidateFacts) -> list[str]:
+    problems = []
+    if r.name.strip() != c.full_name:
+        problems.append(f"name must be exactly {c.full_name!r}")
+    if len(r.jobs) != len(c.jobs):
+        problems.append(f"must have exactly {len(c.jobs)} jobs in the same order as the facts (got {len(r.jobs)})")
+    for i, (got, want) in enumerate(zip(r.jobs, c.jobs), start=1):
+        for fld, expected in (("title", want.title), ("employer", want.employer), ("start", want.start_text),
+                              ("end", want.end_text)):
+            if getattr(got, fld).strip() != expected:
+                problems.append(f"job {i} {fld} must be exactly {expected!r} (got {getattr(got, fld)!r})")
+        if not 1 <= len(got.bullets) <= 6:
+            problems.append(f"job {i} needs 2-5 bullets (got {len(got.bullets)})")
+    # Software must come from the facts: flag any known A/E/C tool that isn't the candidate's
+    text = r.to_text()
+    for sw in sorted(c.software, key=len, reverse=True):  # scrub allowed names, longest first
+        text = re.sub(re.escape(sw), " ", text, flags=re.I)
+    for sw in sorted(ALL_SOFTWARE - set(c.software), key=len, reverse=True):
+        if re.search(rf"(?<![\w-]){re.escape(sw)}(?![\w-])", text, flags=re.I):
+            problems.append(f"software not in facts: {sw!r} (only use the facts' software list)")
+    if not c.open_to_relocation and re.search(r"relocat", " ".join(r.contact) + " " + r.summary, re.I):
+        problems.append("do not mention relocation: the candidate is not open to relocation")
+    want_edu = sorted((e.degree, e.school, str(e.year)) for e in c.education)
+    got_edu = sorted((e.degree.strip(), e.school.strip(), e.year.strip()) for e in r.education)
+    if got_edu != want_edu:
+        problems.append(f"education must be exactly {want_edu}")
+    want_creds = [cr.text for cr in c.credentials]
+    if sorted(x.strip() for x in r.credentials) != sorted(want_creds):
+        problems.append(f"credentials must be exactly {want_creds}")
+    return problems
 
 
-async def write_one(model: ChatAnthropic, c: CandidateFacts, sem: asyncio.Semaphore,
-                    max_retries: int = 2) -> WriteResult:
+async def write_one(model, c: CandidateFacts, sem: asyncio.Semaphore, max_retries: int = 2) -> WriteResult:
     res = WriteResult(candidate_id=c.candidate_id)
-    messages = build_messages(c)
+    feedback: list[str] | None = None
     t0 = time.perf_counter()
     async with sem:
         for attempt in range(1, max_retries + 2):
             res.attempts = attempt
             try:
-                msg = await model.ainvoke(messages)
+                out = await model.ainvoke(build_messages(c, feedback))
             except Exception as e:
                 res.problems = [f"api error: {type(e).__name__}: {e}"]
-                # 4xx request errors are permanent: retrying can't fix them. (Rate limits and
-                # 5xx are already retried with backoff inside the SDK, max_retries=4.)
                 status = getattr(e, "status_code", None)
                 if status is not None and 400 <= status < 500 and status != 429:
-                    break
+                    break  # permanent request error; retrying can't fix it
                 await asyncio.sleep(min(2 ** attempt, 10))
                 continue
-            u = msg.usage_metadata or {}
+            u = getattr(out["raw"], "usage_metadata", None) or {}
             res.input_tokens += u.get("input_tokens", 0)
             res.output_tokens += u.get("output_tokens", 0)
-            text = _text_of(msg)
-            problems = check(text, c)
+            resume: StructuredResume | None = out["parsed"]
+            if resume is None:
+                feedback = [f"output did not match the schema: {out.get('parsing_error')}"]
+                res.problems = feedback
+                continue
+            problems = structural_check(resume, c) + check(resume.to_text(), c)
             if not problems:
-                res.text, res.problems = text, []
+                res.resume, res.problems = resume, []
                 break
-            res.problems = problems
-            messages = [*messages, AIMessage(text), HumanMessage(
-                "The resume failed these checks:\n- " + "\n- ".join(problems[:12]) +
-                "\nRewrite the full resume fixing every problem. Output only the resume.")]
+            res.problems = feedback = problems
     res.seconds = round(time.perf_counter() - t0, 2)
     return res
 
 
-def make_model() -> ChatAnthropic:
+def make_model():
     model_id = prompts.load(PROMPT_NAME, PROMPT_VERSION)["model"]
-    # No `temperature`: Claude 5.5 models reject it (400 "temperature is deprecated").
-    # Variety comes from the persona/layout/length instructions instead.
-    return ChatAnthropic(model=model_id, max_tokens=3000, max_retries=4, timeout=90)
+    # No `temperature`: Claude 5.5 models reject it. Variety comes from persona/length/header hints.
+    llm = ChatAnthropic(model=model_id, max_tokens=4000, max_retries=4, timeout=120)
+    return llm.with_structured_output(StructuredResume, include_raw=True)
 
 
 async def write_many(cands: list[CandidateFacts], concurrency: int = 8, on_done=None) -> list[WriteResult]:

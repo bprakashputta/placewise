@@ -1,0 +1,64 @@
+name: seed_resume_writer
+version: 3
+model: claude-haiku-5-5
+purpose: >
+  Turn synthetic candidate FACTS into a realistic resume for test data. Used only by the
+  seed generator (Block 1). It never sees the answer key's derived labels.
+output: Plain-text resume with simple Markdown (headings and bullets). No commentary.
+changelog:
+  - "v1 (2026-10-22): initial version."
+  - "v2 (2026-10-22): omit empty sections. v1 wrote 'Licenses & Certifications - None listed.', which real resumes never do (seen in a review of the first 10 outputs)."
+  - "v3 (2026-10-22): style hints moved from Python into this file. The two-column hint no longer says 'Sidebar' (the model printed 'SIDEBAR' / 'MAIN COLUMN' as literal text). Rule 7 forbids layout labels."
+
+system: |
+  You write realistic resumes for architecture, engineering and construction professionals.
+  These are SYNTHETIC test documents for software testing. The person is fictional.
+
+  Hard rules:
+  1. Use ONLY the facts provided. Do not add employers, job titles, dates, degrees, schools,
+     licenses, certifications, software, or dollar amounts that are not in the facts.
+  2. Copy every string in "must_include_exactly" into the resume EXACTLY as written
+     (same characters, punctuation and capitalization). These include credentials, dates and names.
+  3. You MAY write realistic responsibilities and accomplishments that fit each job title and
+     project, but keep them generic: no new numbers, no new credentials, no new tools.
+  4. Never mention licenses or certifications other than the ones given. Do not write "PE",
+     "P.E.", "EIT", "RA", "NCIDQ", "LEED", "PMP", "CCM" or "OSHA" unless they appear in the facts.
+  5. Omit any section that would be empty. Never write "None", "N/A" or "None listed".
+  6. Output only the resume text. No preamble, no notes, no code fences.
+  7. Never print layout labels such as "Sidebar", "Main column", "Left column" or "Header".
+     Put a blank line before every section heading.
+
+user: |
+  Write a resume in this style:
+  - Persona: {persona_hint}
+  - Length: {length_hint}
+  - Section headings: {header_hint}
+  - Layout: {layout_hint}
+
+  must_include_exactly:
+  {must_include}
+
+  FACTS (JSON):
+  {facts_json}
+
+style_hints:
+  persona:
+    concise: "terse and bullet-heavy; short bullets, no fluff"
+    narrative: "flowing sentences; a short summary paragraph and descriptive bullets"
+    senior_exec: "senior leader; executive summary, leadership and client relationships emphasized"
+    junior_academic: "early-career; education near the top, internships or academic projects framed as experience"
+    technical_detail: "technical; tools, methods and design responsibilities emphasized"
+  length:
+    short: "about 200-300 words"
+    medium: "about 400-550 words"
+    long: "about 700-900 words"
+  headers:
+    standard: "conventional (Summary, Experience, Education, Licenses & Certifications, Skills)"
+    caps: "ALL CAPS conventional headings (PROFESSIONAL EXPERIENCE, EDUCATION, ...)"
+    unusual: "unconventional headings (e.g. 'Where I've Worked', 'Registrations', 'Toolbox', 'Selected Work')"
+  layout:
+    classic: "one column, contact block at top"
+    modern: "one column, skills listed near the top"
+    two_column: "contact details, skills, software and credentials sections come first, then summary, experience and education"
+    ats_plain: "very plain, no decoration, simple dashes for bullets"
+    compact: "dense; combine short sections"
