@@ -63,3 +63,21 @@ UI notes: the score is computed by code from the verdicts (must-haves weigh 3×,
 each requirement as a row with a verdict icon (✓ met, ◐ partial, ✕ not met, ? unknown), the evidence
 quote, and the note (e.g. "License is in another state: PE:OK"). `relaxed` lists filters that were
 loosened because too few candidates qualified: show it as a notice.
+
+## Conversations: conversational Ask (Block 7, ADR 018)
+A recruiter's Ask chats are saved as **conversations** (each user sees only their own). Each message is
+routed first: greetings, help and off-topic messages get an instant reply with no search; only candidate
+questions run the RAG pipeline. Follow-ups ("which of those have PMP?") reuse the previous answer's candidates.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/conversations` | `[{id, title, job_order_id, job_order_title, active, created_at, last_message_at, message_count}]`, newest first, max 50. `active` = a message in the last 24 h and the job order (if any) is still open |
+| POST | `/api/conversations` | body `{"job_order_id"?: int}` → the new conversation `{id, title, job_order_id, job_order_title, active, created_at, last_message_at, message_count, messages: [...]}`. A conversation tied to a job order starts with one assistant `intro` message. 404 if the job order doesn't exist |
+| GET | `/api/conversations/{id}` | `{id, title, job_order_id, job_order_title, active, created_at, last_message_at, message_count, messages: [Message]}` · 404 if not yours |
+| POST | `/api/conversations/{id}/messages` | body `{"content": str (1–2000 chars, not blank)}` → `{"user_message": Message, "assistant_message": Message}`. Greetings take <1 s; searches ~10–15 s. 429 at the spend cap (nothing is saved). 404 if not yours |
+
+`Message` = `{id, role: "user"|"assistant", kind, content, response, suggestions: [str], created_at}`
+- `kind` (assistant): `greeting` · `help` · `off_topic` · `intro` · `search` · `follow_up` · `job_order`. User messages have `kind: "user"`.
+- `content`: Markdown text to show. For search kinds it's the answer text.
+- `response`: for search kinds, the same object `POST /api/ask` returns (citations, candidates, plan, timings, cost), plus `"standalone_question"`: the complete question that was searched (e.g. "Of the 8 candidates above, which have an active PMP?"). `null` for other kinds.
+- `suggestions`: 0–3 short follow-up prompts to show as clickable chips (clicking sends that text).

@@ -1,0 +1,40 @@
+# Planned conversational Ask (ADR 018, Block 7): route first, search only when needed, remember the conversation.
+vars: {d2-config: {theme-id: 0; pad: 40}}
+direction: right
+
+classes: {
+  node: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; border-radius: 10; font-color: "#1E1B4B"; stroke-width: 2}}
+  ai: {style: {fill: "#FFF7ED"; stroke: "#EA580C"; border-radius: 10; font-color: "#7C2D12"; stroke-width: 2}}
+  code: {style: {fill: "#ECFDF5"; stroke: "#059669"; border-radius: 10; font-color: "#064E3B"; stroke-width: 2}}
+  end: {shape: oval; style: {fill: "#F1F5F9"; stroke: "#64748B"; font-color: "#334155"}}
+  data: {shape: cylinder; style: {fill: "#ECFDF5"; stroke: "#059669"; font-color: "#064E3B"}}
+  planned: {style: {fill: "#F8FAFC"; stroke: "#94A3B8"; stroke-dash: 4; border-radius: 10; font-color: "#334155"; stroke-width: 2}}
+}
+
+msg: "Message in a\nconversation" {class: end}
+state: "LangGraph Postgres\ncheckpointer\n(conversation memory)" {class: data}
+
+route: "route (NEW)\nClaude Haiku 5.5\n<1 s · <$0.001" {class: ai}
+
+greet: "greeting / help\nshort reply + today's\ncontext, no search" {class: code}
+off: "off-topic / unsafe\npolite redirect,\nno search" {class: code}
+rewrite: "rewrite (NEW)\nfollow-up → complete\nquestion, keeps last\ncandidates + filters" {class: ai}
+jo: "job order\nuse its structured\nrequirements" {class: code}
+
+rag: "RAG pipeline (Block 5)\nunderstand → retrieve\n→ rerank → answer\n→ citation check" {class: node}
+
+reply: "Reply" {class: end}
+
+msg -> route
+state -> route: "last turns +\nsummary" {style.stroke-dash: 3}
+route -> greet: "greeting · help"
+route -> off: "off_topic"
+route -> rewrite: "follow_up"
+route -> jo: "job_order"
+route -> rag: "search"
+rewrite -> rag
+jo -> rag
+greet -> reply
+off -> reply
+rag -> reply
+reply -> state: "save turn" {style.stroke-dash: 3}

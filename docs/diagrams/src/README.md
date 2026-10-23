@@ -22,3 +22,5 @@ Check every render visually before committing (for example `qlmanage -t -s 1400 
 | `sequence-health-check.d2` | System status health check | `../sequence-health-check.md` |
 | `sequence-seed-pipeline.d2` | Synthetic data pipeline (sequence) | `../sequence-seed-pipeline.md` |
 | `synthetic-data-flow.d2` | Synthetic data steps (flow) | `docs/modules/synthetic-data.md` |
+| `rag-graph.d2` | The Ask (RAG) LangGraph as built | `docs/modules/rag.md` |
+| `ask-conversation.d2` | Planned conversational Ask: routing + memory (ADR 018) | `docs/modules/rag.md` |

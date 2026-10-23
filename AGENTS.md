@@ -49,7 +49,7 @@ Coordinator status → Lead proposes design → OWNER APPROVES → Lead builds �
 
 ## Architecture (agreed)
 - **Docker Compose** services: `web` (Next.js App Router + Tailwind + shadcn/ui, light/dark), `api` (FastAPI, stateless), `worker` (runs LangGraph jobs from a Postgres `SKIP LOCKED` queue, scales horizontally), `db` (Postgres 17 + pgvector), `n8n`, `mailpit` (local test inbox), and optional `tunnel` (Cloudflare quick tunnel for a temporary public link).
-- **LangChain** for model wrappers, structured output, prompts, embeddings and the PGVector store and retrievers.
+- **LangChain** for model wrappers, structured output, prompts and embeddings. Retrieval is our own SQL over Postgres + pgvector (hybrid search with typed filters), not LangChain's PGVector retriever: see ADR 017.
 - **LangGraph** for the ingest graph, the match graph (parallel fan-out scoring, approval `interrupt`) and the recruiter agent. The checkpointer is in Postgres.
 - **LangSmith** for tracing every run, datasets, evaluators and prompt versions.
 - **Models:** Claude Sonnet 5.5 (main), Claude Opus 5.5 (agent). Use Haiku 5.5 only where evals show equal quality. Embeddings: Voyage `voyage-4-large`. Reranker: Voyage `rerank-3`. All model names live in config.
