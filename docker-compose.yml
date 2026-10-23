@@ -106,6 +106,7 @@ services:
       DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise
       APP_SECRET_KEY: ${APP_SECRET_KEY:-unused-in-seed}
       ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
+      VOYAGE_API_KEY: ${PLACEWISE_VOYAGE_TEST_API_KEY:-}
       LANGSMITH_TRACING: ${SEED_TRACING:-false}   # off for data generation; evals turn it on (SEED_TRACING=true)
       LANGSMITH_API_KEY: ${PLACEWISE_LANGSMITH_TEST_API_KEY:-}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
