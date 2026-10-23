@@ -45,9 +45,32 @@ services:
     command: ["uvicorn", "placewise.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
     volumes:
       - ./src:/app/src
+      # Seed page (dev): aggregates + files only. data/seed/truth is deliberately NOT mounted.
+      - ./data/seed/public:/app/data/seed/public:ro
+      - ./data/seed/resumes:/app/data/seed/resumes:ro
+      - ./outputs/samples:/app/outputs/samples:ro
     ports:
       - "127.0.0.1:8000:8000"   # local only, for API docs at http://localhost:8000/docs
     restart: unless-stopped
+
+  # On-demand tool, not a long-running service:  docker compose run --rm seed facts --count 500
+  # The ONLY container (besides future evals) that mounts the answer key in data/seed/truth.
+  seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    entrypoint: ["python", "-m", "placewise.seed"]
+    command: ["--help"]
+    environment:
+      PLACEWISE_DATA_DIR: /app/data
+      ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
+      LANGSMITH_TRACING: "false"   # test-data generation is not product traffic; saves trace quota
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./prompts:/app/prompts:ro
+      - ./outputs:/app/outputs
 
   web:
     build:

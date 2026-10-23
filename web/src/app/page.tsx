@@ -13,6 +13,9 @@ export default function Home() {
         </p>
       </header>
       <SystemStatus />
+      <a href="/seed" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+        View synthetic seed data (dev) →
+      </a>
     </main>
   );
 }

@@ -73,3 +73,9 @@ if DEV:
     async def dev_trace() -> dict:
         """Dev only: send one small test trace to LangSmith."""
         return await asyncio.to_thread(_trace_check)
+
+    # Dev-only live view of synthetic data generation (Block 1). Under /api so the web app
+    # can reach it, but it is only registered in dev, so it doesn't exist in prod.
+    from .dev_seed import router as dev_seed_router
+
+    app.include_router(dev_seed_router)
