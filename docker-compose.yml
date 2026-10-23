@@ -1,0 +1,72 @@
+# Placewise: local stack. Start everything with:  docker compose up --build
+# Services are added block by block (worker, n8n, mailpit and tunnel come later).
+
+name: placewise
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.1-pg17
+    environment:
+      POSTGRES_USER: placewise
+      POSTGRES_DB: placewise
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
+    # Not published to the host: the host's own Postgres uses 5432.
+    # For debugging only, uncomment:  ports: ["127.0.0.1:5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U placewise -d placewise"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    environment:
+      DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in .env}
+      DAILY_LLM_SPEND_CAP_USD: ${DAILY_LLM_SPEND_CAP_USD:-10}
+      # Owner's .env names → standard SDK names
+      ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
+      VOYAGE_API_KEY: ${PLACEWISE_VOYAGE_TEST_API_KEY:-}
+      LANGSMITH_API_KEY: ${PLACEWISE_LANGSMITH_TEST_API_KEY:-}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-placewise}
+    depends_on:
+      db:
+        condition: service_healthy
+    # Development: reload on code changes. The venv lives in /opt/venv, so mounting src is safe.
+    command: ["uvicorn", "placewise.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
+    volumes:
+      - ./src:/app/src
+    ports:
+      - "127.0.0.1:8000:8000"   # local only, for API docs at http://localhost:8000/docs
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      NEXT_TELEMETRY_DISABLED: "1"
+      WATCHPACK_POLLING: "true"   # reliable file watching through Docker on macOS
+    depends_on:
+      - api
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+      - web_next:/app/.next
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  web_node_modules:
+  web_next:
