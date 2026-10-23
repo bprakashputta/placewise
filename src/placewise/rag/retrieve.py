@@ -72,8 +72,12 @@ def _where(f: Filters, person_ids: list[int] | None = None) -> tuple[str, list]:
         sql.append("(p.metro = %s OR p.open_to_relocation)")
         args.append(f.metro)
     for code in f.license_codes:
-        sql.append("%s = ANY(p.license_codes)")
-        args.append(code)
+        if ":" in code:
+            sql.append("%s = ANY(p.license_codes)")
+            args.append(code)
+        else:   # "RA" with no state: licensed in any state (codes are stored as RA:TX, PE:OK, ...)
+            sql.append("EXISTS (SELECT 1 FROM unnest(p.license_codes) lc WHERE lc = %s OR lc LIKE %s)")
+            args += [code, code.replace("_", "\\_") + ":%"]
     if f.min_years is not None:
         sql.append("p.years_experience >= %s")
         args.append(f.min_years)

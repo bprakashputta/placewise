@@ -101,7 +101,7 @@ export function ConversationsPanel({
                               {c.job_order_title && (
                                 <Badge variant="outline" className="h-4 max-w-[11rem] gap-1 px-1.5 text-[10px] font-normal" title={c.job_order_title}>
                                   <Briefcase className="size-2.5" aria-hidden="true" />
-                                  <span className="truncate">{c.job_order_title}</span>
+                                  <span className="truncate">{c.title === c.job_order_title && c.job_order_id ? `JO-${String(c.job_order_id).padStart(2, "0")}` : c.job_order_title}</span>
                                 </Badge>
                               )}
                               {!c.active && <span className="text-[10px] text-muted-foreground">Closed</span>}

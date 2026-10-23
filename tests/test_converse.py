@@ -200,3 +200,9 @@ def test_other_users_conversation_is_404_and_spend_cap_saves_nothing(client, mon
     state["conv"] = {"id": 5, "job_order_id": None}
     assert c.post("/api/conversations/5/messages", json={"content": "PEs in DFW"}).status_code == 429
     assert state["inserts"] == 0                       # nothing saved when the turn fails
+
+
+def test_license_without_state_matches_any_state():
+    sql, args = _where(Filters(license_codes=["RA", "PE:TX", "TX_RID"]))
+    assert "lc LIKE %s" in sql and args[:2] == ["RA", "RA:%"]
+    assert "PE:TX" in args and "TX\\_RID:%" in args       # underscore escaped for LIKE

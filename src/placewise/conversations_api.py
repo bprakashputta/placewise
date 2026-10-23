@@ -74,6 +74,14 @@ async def create_conversation(body: NewConversation, user: dict = Depends(curren
     if body.job_order_id and not jo:
         raise HTTPException(404, "job order not found")
     async with pool().connection() as conn:
+        if jo:   # reuse this user's active chat about the same job order instead of piling up duplicates
+            cur = conn.cursor(row_factory=dict_row)
+            await cur.execute(_CONV_SQL + " WHERE c.user_id = %s AND c.job_order_id = %s "
+                              "AND c.last_message_at > now() - interval '24 hours' "
+                              "ORDER BY c.last_message_at DESC LIMIT 1", (user["id"], jo["id"]))
+            existing = await cur.fetchone()
+            if existing:
+                return {**existing, "messages": [_public(m) for m in await _messages(conn, existing["id"])]}
         async with conn.transaction():
             cur = await conn.execute(
                 "INSERT INTO conversations (user_id, title, job_order_id) VALUES (%s, %s, %s) RETURNING id",

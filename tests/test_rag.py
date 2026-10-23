@@ -14,8 +14,9 @@ def h(cid, pid, vr=None, kr=None, content="x", section="job"):
 def test_where_builds_parameterized_filters():
     sql, args = _where(Filters(discipline="civil", metro="DFW", license_codes=["PE:TX", "LEED_AP"], min_years=8))
     assert "p.discipline = %s" in sql and "(p.metro = %s OR p.open_to_relocation)" in sql
-    assert sql.count("= ANY(p.license_codes)") == 2 and "p.years_experience >= %s" in sql
-    assert args == ["civil", "DFW", "PE:TX", "LEED_AP", 8]
+    assert "%s = ANY(p.license_codes)" in sql and "lc = %s OR lc LIKE %s" in sql   # stateless keys: any state
+    assert "p.years_experience >= %s" in sql
+    assert args == ["civil", "DFW", "PE:TX", "LEED_AP", "LEED\\_AP:%", 8]
     assert _where(Filters()) == ("TRUE", [])
 
 
