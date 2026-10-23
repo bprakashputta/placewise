@@ -19,4 +19,4 @@ Status: ⬜ not started · 🟨 design proposed · 🟦 in progress · ✅ done
 
 ## Notes
 - Files in `src/copilot/` (config, schemas, db, llm) are an **early scaffold written before the LangChain/LangGraph design was agreed**. Review them in blocks 0–2: keep what fits and replace the rest.
-- The local `.venv` predates the folder rename. Rebuild it (or rely on Docker) before use.
+- The local `.venv` predates the folder rename and is not used. Everything runs in Docker. Safe to delete.
