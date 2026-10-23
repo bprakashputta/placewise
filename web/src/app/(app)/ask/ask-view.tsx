@@ -467,7 +467,7 @@ function ChatThread({
       </section>
 
       {/* ≥ xl: docked candidates column. */}
-      <aside className="hidden w-[400px] shrink-0 border-l bg-muted/30 xl:block 2xl:w-[640px] dark:bg-muted/10" aria-label="Candidates">
+      <aside className="hidden w-[400px] shrink-0 border-l bg-muted/30 xl:block 2xl:w-[460px] dark:bg-muted/10" aria-label="Candidates">
         {panel()}
       </aside>
 
