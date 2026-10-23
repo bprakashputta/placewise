@@ -38,8 +38,12 @@ Every block follows this sequence:
 ```
 Coordinator status → Lead proposes design → OWNER APPROVES → Lead builds → Reviewer → fixes
 → QA tester → fixes → UX reviewer (UI blocks) → fixes → Docs maintainer → Coordinator close-out
-→ commit → CHECK-IN WITH OWNER → next block
+→ open a GitHub PR → CI (tests + web lint/build) + Claude Code review on the PR → fix findings
+→ OWNER APPROVES THE PR → merge (--no-ff) + tag block-NN-done → next block
 ```
+- PRs are opened with `gh pr create` and carry: summary, reviewer and QA results, test count, eval numbers, docs links.
+- `.github/workflows/ci.yml` runs the test suite in the api image and the web lint and build.
+- `.github/workflows/claude-review.yml` posts an automated Claude review on every PR. Mention `@claude` in a PR comment for follow-ups (`claude.yml`).
 - Subagents can't launch other agents, so the lead launches each role.
 - Run parallel builders only for truly independent pieces, each in its own git worktree, and only with the owner's OK.
 

@@ -1,0 +1,49 @@
+# CI: runs on every pull request and on pushes to main.
+# Same containers as local development, so CI tests exactly what runs in Docker.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build the api image
+        run: docker build -f docker/api.Dockerfile -t placewise-api:ci .
+      - name: Run tests in the container
+        # Tests use fake env vars and temp dirs: no database, network or LLM calls.
+        run: |
+          docker run --rm \
+            -v "$PWD/tests:/app/tests:ro" -v "$PWD/prompts:/app/prompts:ro" \
+            -e PYTHONDONTWRITEBYTECODE=1 \
+            placewise-api:ci pytest -q -p no:cacheprovider /app/tests
+
+  web:
+    name: Web lint + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
