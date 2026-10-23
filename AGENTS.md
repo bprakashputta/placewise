@@ -76,6 +76,15 @@ outputs/                   sample outputs, eval reports, screenshots
 - `prompts/*.yaml`: never hardcode prompts in code
 - `docs/diagrams/`: Mermaid diagrams (architecture, sequence, state, ER, deployment)
 
+## Git branching (MUST follow)
+- **`main` always works.** Only finished, reviewed, owner-approved blocks are merged into it.
+- **One branch per block or workflow:** `block/NN-short-name` (e.g. `block/00-foundation`, `block/02-ingest`). Branch from the latest `main`.
+- Commit often on the block branch and push it to GitHub.
+- **Merge only after the owner's check-in**: `git merge --no-ff block/NN-...` into `main`, then tag `block-NN-done`. The tag is a known-good restore point if a later block breaks something.
+- Fixes to an already-merged block go on a new branch: `fix/NN-short-name`.
+- Never force-push `main`. Never merge a block whose tests fail.
+- Docs, prompts and diagrams for a block go on that block's branch, so code and docs merge together.
+
 ## Conventions
 - Python 3.12, managed with `uv`, run inside Docker. Pydantic for every LLM output schema.
 - Secrets live only in `.env` (gitignored). Never commit keys. `.env.example` lists the variable names.
