@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Search, SearchX, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search, SearchX, Sparkles, X } from "lucide-react";
 import { ApiErrorState } from "@/components/api-state";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -16,7 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useApi, type CandidateList, type Facets } from "@/lib/api";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useApi, type CandidateList, type CandidateRow, type Facets, type SearchResponse } from "@/lib/api";
+
+type Row = CandidateRow & { match?: string | null };
 import { disciplineLabel, formatNumber, formatYears, humanize, licenseLabel, relativeTime } from "@/lib/format";
 import { NeedsAttentionList } from "./needs-attention-list";
 import { UploadDialog } from "./upload-dialog";
@@ -68,14 +71,16 @@ function FilterSelect({
   value,
   options,
   onChange,
+  disabled,
 }: {
   name: FilterKey;
+  disabled?: boolean;
   value: string;
   options: Record<string, number> | undefined;
   onChange: (v: string | null) => void;
 }) {
   return (
-    <Select value={value || ALL} onValueChange={(v) => onChange(v === ALL ? null : v)}>
+    <Select disabled={disabled} value={value || ALL} onValueChange={(v) => onChange(v === ALL ? null : v)}>
       <SelectTrigger className="w-full" aria-label={FILTER_LABELS[name]}>
         <SelectValue placeholder={FILTER_LABELS[name]} />
       </SelectTrigger>
@@ -94,7 +99,7 @@ function FilterSelect({
   );
 }
 
-function SearchInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function SearchInput({ value, onChange, smart }: { value: string; onChange: (v: string) => void; smart: boolean }) {
   const [text, setText] = useState(value);
   const [synced, setSynced] = useState(value);
   // Follow outside changes to ?q= (top-bar search, "clear filters") without fighting the user's typing.
@@ -114,7 +119,7 @@ function SearchInput({ value, onChange }: { value: string; onChange: (v: string)
         type="search"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Search name, title, employer, skills…"
+        placeholder={smart ? "Describe the candidate, e.g. hospital MEP design" : "Search name, title, employer, skills…"}
         aria-label="Search candidates"
         className="pl-8"
       />
@@ -138,11 +143,21 @@ function CandidateTable() {
   const page = Math.max(1, Number(params.get("page")) || 1);
   const filters = Object.fromEntries(FILTERS.map((k) => [k, params.get(k) ?? ""])) as Record<FilterKey, string>;
   const q = params.get("q") ?? "";
+  const smart = params.get("mode") === "smart";
   const minYears = params.get("min_years") ?? "";
   const hasFilters = Boolean(q || minYears || FILTERS.some((k) => filters[k]));
 
   const listPath = (() => {
     const api = new URLSearchParams();
+    if (smart) {
+      // Smart search ranks by meaning (vectors + full text); no paging, quality isn't a search filter.
+      if (!q) return null;
+      api.set("q", q);
+      for (const k of FILTERS) if (filters[k] && k !== "quality") api.set(k, filters[k]);
+      if (minYears) api.set("min_years", minYears);
+      api.set("limit", "20");
+      return `/api/search?${api}`;
+    }
     if (q) api.set("q", q);
     for (const k of FILTERS) if (filters[k]) api.set(k, filters[k]);
     if (minYears) api.set("min_years", minYears);
@@ -152,8 +167,20 @@ function CandidateTable() {
   })();
 
   const facets = useApi<Facets>("/api/candidates/facets");
-  const list = useApi<CandidateList>(listPath);
-  const data = list.data;
+  const list = useApi<CandidateList | SearchResponse>(listPath);
+  const raw = list.data;
+  // Normalize both endpoints to one row shape; ignore stale data from the other mode while switching.
+  const data: { total: number; items: Row[] } | undefined = smart
+    ? raw && "query" in raw
+      ? {
+          total: raw.items.length,
+          items: raw.items.map((i) => ({ ...i, subdiscipline: null, city: null, state: null, quality_issues: [], processed_at: null })),
+        }
+      : undefined
+    : raw && "total" in raw
+      ? raw
+      : undefined;
+  const awaitingQuery = smart && !q;
   const total = data?.total ?? 0;
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(total, page * PAGE_SIZE);
@@ -167,10 +194,27 @@ function CandidateTable() {
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_7rem]">
         <div className="sm:col-span-2 lg:col-span-1">
-          <SearchInput value={q} onChange={onSearch} />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <SearchInput value={q} onChange={onSearch} smart={smart} />
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={smart ? "default" : "outline"}
+                  aria-pressed={smart}
+                  onClick={() => set({ mode: smart ? null : "smart" })}
+                  className="h-8 shrink-0"
+                >
+                  <Sparkles aria-hidden="true" /> Smart
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Smart search finds candidates by meaning, e.g. &ldquo;hospital MEP design&rdquo;</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
         {FILTERS.map((k) => (
-          <FilterSelect key={k} name={k} value={filters[k]} options={facets.data?.[k]} onChange={(v) => set({ [k]: v })} />
+          <FilterSelect key={k} name={k} disabled={smart && k === "quality"} value={filters[k]} options={facets.data?.[k]} onChange={(v) => set({ [k]: v })} />
         ))}
         <Input
           type="number"
@@ -188,7 +232,17 @@ function CandidateTable() {
 
       <div className="flex min-h-7 flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <p aria-live="polite">
-          {data ? (
+          {awaitingQuery ? (
+            "Describe who you're looking for, e.g. “hospital MEP design in Houston”"
+          ) : data && smart ? (
+            total > 0 ? (
+              <>
+                <span className="font-medium text-foreground tabular-nums">{total}</span> best matches by meaning
+              </>
+            ) : (
+              "No matches"
+            )
+          ) : data ? (
             total > 0 ? (
               <>
                 <span className="font-medium text-foreground tabular-nums">
@@ -222,7 +276,18 @@ function CandidateTable() {
             </TableRow>
           </TableHeader>
           <TableBody className={list.loading && data ? "opacity-60 transition-opacity" : undefined}>
-            {!data &&
+            {awaitingQuery && (
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={COLUMNS.length} className="p-0 whitespace-normal">
+                  <EmptyState
+                    icon={Sparkles}
+                    title="Smart search"
+                    description="Type what you need in plain words. Results are ranked by meaning, not just keywords, and show the matching resume text."
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+            {!data && !awaitingQuery &&
               Array.from({ length: 8 }, (_, i) => (
                 <TableRow key={i} className="hover:bg-transparent">
                   {COLUMNS.map((c) => (
@@ -259,6 +324,11 @@ function CandidateTable() {
                       {c.full_name}
                     </Link>
                     <p className="line-clamp-1 text-xs text-muted-foreground">{c.headline ?? "–"}</p>
+                    {c.match && (
+                      <p className="mt-1 line-clamp-2 border-l-2 border-brand/40 pl-2 text-xs text-muted-foreground italic">
+                        …{c.match}…
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground lg:hidden">{[c.city, c.metro].filter(Boolean).join(" · ")}</p>
                   </TableCell>
                   <TableCell className="hidden px-4 md:table-cell">
@@ -290,7 +360,7 @@ function CandidateTable() {
         </Table>
       </Card>
 
-      {total > PAGE_SIZE && (
+      {!smart && total > PAGE_SIZE && (
         <nav aria-label="Pagination" className="flex items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
             Page {page} of {pages}

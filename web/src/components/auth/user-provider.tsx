@@ -16,6 +16,8 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       await apiFetch("/api/auth/logout", { method: "POST" });
     } finally {
       // Full navigation so no signed-in client state survives the logout.
+      // Intentional full navigation: drops all signed-in client state.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/login";
     }
   }, []);

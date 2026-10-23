@@ -142,6 +142,8 @@ export class ApiError extends Error {
 export function redirectToLogin() {
   if (typeof window === "undefined" || window.location.pathname === "/login") return;
   const next = window.location.pathname + window.location.search;
+  // Full navigation (not router.push) so no stale signed-in state survives.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.href = `/login?next=${encodeURIComponent(next)}`;
 }
 
@@ -197,3 +199,54 @@ export function useApi<T>(path: string | null) {
     reload,
   };
 }
+
+// Ask (RAG) and smart search, Block 5 (docs/api-contract.md on block/05-rag).
+export type Citation = {
+  chunk_id: number;
+  person_id: number;
+  resume_file_id: number;
+  candidate_name: string;
+  section: string;
+  quote: string;
+};
+
+export type AskCandidate = {
+  person_id: number;
+  full_name: string;
+  headline: string | null;
+  discipline: string | null;
+  metro: string | null;
+  city: string | null;
+  years_experience: number | null;
+  license_codes: string[];
+  quality: Quality;
+  score: number;
+  top_sections: { chunk_id: number; section: string; content: string }[];
+};
+
+export type AskResponse = {
+  question: string;
+  answer: string;
+  citations: Citation[];
+  candidates: AskCandidate[];
+  plan: { filters: Record<string, unknown>; search_query: string };
+  dropped_citations: string[];
+  timings_ms: Record<string, number>;
+  cost_usd: number;
+};
+
+export type SearchResponse = {
+  query: string;
+  items: {
+    person_id: number;
+    full_name: string;
+    headline: string | null;
+    discipline: string | null;
+    metro: string | null;
+    years_experience: number | null;
+    license_codes: string[];
+    quality: Quality;
+    score: number;
+    match: string | null;
+  }[];
+};
