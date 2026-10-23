@@ -12,18 +12,9 @@ Diagrams: [seed pipeline sequence](../diagrams/sequence-seed-pipeline.md) · [ar
 Decisions: [ADR 006](../decisions/006-synthetic-data-code-facts-as-ground-truth.md) · [ADR 007](../decisions/007-structured-llm-output-plus-rendering.md) · [ADR 008](../decisions/008-answer-key-isolation.md) · [ADR 009](../decisions/009-haiku-writer-separate-from-reader.md)
 
 ## Data flow
-```mermaid
-flowchart LR
-    facts["facts<br/>code, seed 42"] --> write["write<br/>Haiku, structured"]
-    write --> check{"checks pass?"}
-    check -->|"no, max 2 retries"| write
-    check -->|"yes"| noise["noise<br/>code"]
-    noise --> render["render<br/>PDF, DOCX, TXT"]
-    render --> jo["job orders<br/>+ targeted candidates"]
-    jo --> key["answer key<br/>relevance.jsonl"]
-    key --> publish["publish<br/>aggregates + dev showcase"]
-    publish --> page["Seed page<br/>dev only"]
-```
+![Synthetic data flow: facts, write, checks, noise, render, job orders, answer key, publish, Seed page](../diagrams/synthetic-data-flow.svg)
+
+*Synthetic data flow (code steps green, LLM step orange). Source: [`diagrams/src/synthetic-data-flow.d2`](../diagrams/src/synthetic-data-flow.d2).*
 
 | Step | Command | Reads | Writes |
 |---|---|---|---|

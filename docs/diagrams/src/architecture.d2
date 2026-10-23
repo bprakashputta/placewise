@@ -19,28 +19,39 @@ users: Users {
 app: "Placewise (Docker Compose)" {
   class: group
   web: "Web portal\nNext.js 16 · shadcn/ui" {class: svc}
-  api: "API\nFastAPI · stateless" {class: svc}
-  worker: "Ingest workers ×N\nLangGraph pipeline" {class: svc}
+  api: "API\nFastAPI · stateless\ncandidates · upload · queue status" {class: svc}
+  worker: "Ingest workers ×3\n4 job slots each\nLangGraph pipeline" {class: svc}
   web -> api: "/api/* only"
-  api -> worker: "job queue\n(Postgres)" {style.stroke-dash: 3}
+  api -> worker: "job queue in Postgres\n(SKIP LOCKED)" {style.stroke-dash: 3}
 }
 
 data: Data {
   class: group
-  db: "Postgres 17 + pgvector\nprofiles · section chunks (HNSW + full-text)\njob queue · LLM cost log" {class: store}
+  db: "Postgres 17 + pgvector\npeople · resume files · profiles\nsection chunks (HNSW + full-text)\njob queue · extraction cache · LLM cost log" {class: store}
+  files: "Resume files\nstorage volume (uploads)\n+ seed resumes (read-only)" {class: store}
 }
 
 ai: "External AI services" {
   class: group
   claude: "Anthropic\nClaude Sonnet 5.5\nprofile extraction" {class: ext}
-  voyage: "Voyage AI\nvoyage-4-large\nembeddings" {class: ext}
+  voyage: "Voyage AI\nvoyage-4-large\nembeddings (1024-dim)" {class: ext}
   langsmith: "LangSmith\ntraces · evals" {class: ext}
 }
 
+dev: "Dev tools (on demand)" {
+  class: group
+  seed: "seed container\nsynthetic data · evals" {class: svc}
+  truth: "answer key\ndata/seed/truth\n(mounted here only)" {class: store}
+  seed -> truth
+}
+
 users.recruiter -> app.web
-users.sources -> app.api: "upload / webhook" {style.stroke-dash: 4}
-app.api -> data.db: "read / write"
-app.worker -> data.db: "store profile + chunks"
+users.sources -> app.api {class: planned; style.stroke-dash: 4}
+app.api -> data.db: "read · enqueue"
+app.api -> data.files: "save upload"
+app.worker -> data.db: "claim job · store profile"
+app.worker -> data.files: "read file"
 app.worker -> ai.claude
 app.worker -> ai.voyage
-app.worker -> ai.langsmith: "every run traced" {style.stroke-dash: 3}
+app.worker -> ai.langsmith: "one trace per resume" {style.stroke-dash: 3}
+dev.seed -> data.db: "evals: stored vs key" {style.stroke-dash: 3}

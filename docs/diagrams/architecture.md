@@ -1,71 +1,37 @@
 # Architecture
 
-Containers and data flow. **Solid boxes are built (Blocks 0–1). Dashed boxes marked "PLANNED" do not exist yet.**
+Containers and data flow as of Block 2. Solid boxes are built. Dashed boxes are **planned** and don't exist yet.
 
-```mermaid
-flowchart LR
-    browser["Browser"]
+![Placewise architecture: users, Docker Compose services, data, external AI services, dev tools](architecture.svg)
 
-    subgraph compose["Docker Compose: project placewise"]
-        web["web<br/>Next.js 16 dev server<br/>:3000"]
-        api["api<br/>FastAPI, Python 3.12<br/>:8000"]
-        db[("db<br/>Postgres 17 + pgvector")]
-        seed["seed<br/>tools profile, on demand<br/>synthetic data CLI"]
-        worker["worker<br/>LangGraph jobs<br/>PLANNED, Block 2"]
-        n8n["n8n<br/>triggers and integrations<br/>PLANNED, Block 8"]
-        mailpit["mailpit<br/>local test inbox<br/>PLANNED, Block 8"]
-        tunnel["tunnel<br/>Cloudflare quick tunnel<br/>PLANNED, Block 9"]
-    end
-
-    subgraph data["./data/seed (bind mounts)"]
-        truth[("truth/<br/>answer key")]
-        files[("public/ + resumes/<br/>+ outputs/samples")]
-    end
-
-    langsmith["LangSmith<br/>external SaaS"]
-    anthropic["Anthropic API<br/>Claude Haiku 5.5"]
-
-    browser -->|"pages + /api/*"| web
-    web -->|"rewrite /api/* only"| api
-    api -->|"SQL, pgvector check"| db
-    api -->|"health check + traces"| langsmith
-    api -->|"read-only, dev routes"| files
-    seed -->|"read/write"| truth
-    seed -->|"read/write"| files
-    seed -->|"resume text + notes"| anthropic
-
-    tunnel -.->|"public link"| web
-    worker -.-> db
-    n8n -.->|"/api/*"| api
-    n8n -.-> mailpit
-
-    classDef planned stroke-dasharray: 5 5,fill:#f5f5f5,color:#666
-    class worker,n8n,mailpit,tunnel planned
-```
+*Containers and data flow (blue = Placewise services, green = data, orange = external AI). Source: [`src/architecture.d2`](src/architecture.d2).*
 
 ## What exists now
 | Container | Role |
 |---|---|
-| `web` | The only thing the browser talks to. Proxies **only** `/api/*` to the api ([ADR 003](../decisions/003-web-proxies-only-api.md)). Pages: System status (`/`) and the dev-only Seed page (`/seed`). |
-| `api` | Stateless FastAPI. `/api/health` (readiness), `/livez` (liveness), dev-only `/docs`, `/dev/trace` and `/api/dev/seed/*`. Mounts `data/seed/public`, `data/seed/resumes` and `outputs/samples` **read-only**; `data/seed/truth` is **not mounted** ([ADR 008](../decisions/008-answer-key-isolation.md)). |
-| `seed` | On-demand tools container (`profiles: ["tools"]`, `docker compose run --rm seed …`), same image as the api. Generates facts, calls Claude Haiku 5.5 to write resumes and job-order notes, renders files and builds the answer key. The only container that mounts `data/seed/truth` (it mounts all of `./data`). LangSmith tracing is off. See [Synthetic data](../modules/synthetic-data.md). |
-| `db` | The single data store ([ADR 001](../decisions/001-postgres-pgvector-single-store.md)). Not used by Block 1. |
-| LangSmith | External tracing service; checked by `/api/health`. |
-| Anthropic API | External; used only by `seed` so far. |
+| `web` | The only thing the browser talks to. Proxies **only** `/api/*` to the api ([ADR 003](../decisions/003-web-proxies-only-api.md)). Pages: System status (`/`) and the dev-only Seed page (`/seed`). The portal shell (Block 3) is being built on its own branch. |
+| `api` | Stateless FastAPI. `/api/health` (readiness), `/livez` (liveness), the candidates API (list, filters, detail, file view/download, **upload**) and ingest queue status/retry. Dev only: `/docs`, `/dev/trace`, `/api/dev/seed/*`, `/api/dev/ingest/*`. Saves uploads to the `storage` volume and enqueues a job; it never runs the pipeline itself. |
+| `worker` | Runs the LangGraph ingest pipeline ([Ingest module](../modules/ingest.md)). Claims jobs from the Postgres queue with `FOR UPDATE SKIP LOCKED` ([ADR 010](../decisions/010-postgres-job-queue-skip-locked.md)); 3 containers × 4 job slots in the full ingest run. Reads uploads from `storage` and seed files from `data/seed/resumes` (read-only). The answer key is **not mounted**. |
+| `db` | The single data store ([ADR 001](../decisions/001-postgres-pgvector-single-store.md)): people, resume files, profiles, section chunks (pgvector HNSW + full-text), the job queue, the extraction cache and the LLM cost log. See the [data model](data-model.svg). |
+| `seed` | On-demand tools container (`profiles: ["tools"]`). Generates synthetic data (Block 1) and runs the evals. The only container that mounts `data/seed/truth` ([ADR 008](../decisions/008-answer-key-isolation.md)). |
+| Anthropic | Claude Sonnet 5.5 for profile extraction (worker); Claude Haiku 5.5 for synthetic data (seed). |
+| Voyage AI | `voyage-4-large` embeddings, 1024 dimensions (worker). |
+| LangSmith | Tracing (one trace per resume), checked by `/api/health`. |
 
-## Mounts for seed data
-| Host path | `seed` | `api` |
-|---|---|---|
-| `./data` (includes `seed/truth`, `seed/generated`) | read/write | **not mounted** |
-| `./data/seed/public` | read/write (via `./data`) | read-only |
-| `./data/seed/resumes` | read/write (via `./data`) | read-only |
-| `./outputs` (`outputs/samples`) | read/write | `outputs/samples` read-only |
-| `./prompts` | read-only | not mounted |
+## Mounts
+| Host path / volume | `api` | `worker` | `seed` |
+|---|---|---|---|
+| `./src`, `./prompts` (ro) | yes (dev reload) | yes | yes |
+| `./data/seed/resumes` | read-only | read-only | read/write (via `./data`) |
+| `./data/seed/public`, `./outputs/samples` | read-only | no | read/write |
+| `./data/seed/truth` (answer key) | **no** | **no** | read/write |
+| `storage` named volume (uploads) | read/write | read/write | no |
+
+Prompts are also baked into the image (`COPY prompts`), so a container without the bind mount still has them.
 
 ## Planned (not built)
-- **worker** (Block 2): runs LangGraph jobs from a Postgres `SKIP LOCKED` queue.
-- **n8n**, **mailpit** (Block 8): intake triggers, notifications, approved-outreach sending to a local inbox.
+- **n8n**, **mailpit** (Block 8): resume intake from an Apply page, email and job boards; approved outreach sent to a local inbox.
 - **tunnel** (Block 9, optional): temporary public link to `web` only.
-- **Evals** (Block 9) will be the only other reader of `data/seed/truth`.
+- **Auth** (Block 3): every candidate and ingest route will require a session.
 
-See also: [deployment](deployment.md) · [health-check sequence](sequence-health-check.md) · [seed pipeline sequence](sequence-seed-pipeline.md) · [Foundation module](../modules/foundation.md) · [Synthetic data module](../modules/synthetic-data.md)
+See also: [deployment](deployment.md) · [ingest graph](ingest-graph.svg) · [queue lifecycle](queue-lifecycle.svg) · [data model](data-model.svg) · [health-check sequence](sequence-health-check.md) · [seed pipeline sequence](sequence-seed-pipeline.md)

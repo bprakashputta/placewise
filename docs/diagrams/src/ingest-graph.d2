@@ -12,9 +12,9 @@ classes: {
 
 receive: "receive\nhash file · dedupe" {class: node}
 parse: "parse + screen\nPDF/DOCX/TXT · hidden text\ninjection · two-column\n(no AI, 30 ms)" {class: code}
-extract: "extract\nClaude Sonnet 5.5\nstructured profile\n+ evidence quotes\n(cached by file hash)" {class: ai}
+extract: "extract\nClaude Sonnet 5.5\nspend cap check\nstructured profile\n+ evidence quotes\n(cached by text hash\n+ model + prompt)" {class: ai}
 validate: "validate\nquotes exist in resume\nyears from dates\nnormalize names\nquality label" {class: code}
-embed: "embed + store\nsection chunks → Voyage\none DB transaction" {class: node}
+embed: "embed + store\nsection chunks → Voyage\nmatch person\none DB transaction" {class: node}
 
 dup: "duplicate\n(identical file)" {class: end}
 attention: "needs attention\n(scan / corrupt file)" {class: warn}

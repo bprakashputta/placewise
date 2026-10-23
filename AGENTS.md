@@ -31,7 +31,7 @@ Role definitions live in `.claude/agents/`. Other tools can read the same files 
 | **Reviewer** | `reviewer.md` | Independent, read-only code review against the design and this file |
 | **QA tester** | `qa-tester.md` | Runs tests, verifies "done when", tries to break it, adds tests |
 | **UX reviewer** | `ux-reviewer.md` | Reviews UI blocks from a recruiter's and an admin's view |
-| **Docs maintainer** | `docs-maintainer.md` | Keeps module docs, Mermaid/UML diagrams, ADRs, build log and prompts in sync with the code |
+| **Docs maintainer** | `docs-maintainer.md` | Keeps module docs, D2 diagrams (rendered SVG), ADRs, build log and prompts in sync with the code |
 | **Coordinator** | `coordinator.md` | Session-start status, end-of-block close-out checklist, owns status in `docs/PLAN.md`, flags drift |
 
 Every block follows this sequence:
@@ -61,7 +61,7 @@ Coordinator status → Lead proposes design → OWNER APPROVES → Lead builds �
 ## Repo layout
 ```
 AGENTS.md / CLAUDE.md      agent context (this file is canonical)
-docs/                      PROJECT_BRIEF, PLAN, architecture, modules/, diagrams/ (Mermaid/UML),
+docs/                      PROJECT_BRIEF, PLAN, architecture, modules/, diagrams/ (D2 sources + SVGs),
                            decisions/ (ADRs), build-log, evals, cost-and-performance, roadmap, demo-script
 prompts/                   versioned prompt files (name, version, model, schema, changelog)
 src/                       Python backend (api, graphs, worker)
@@ -78,7 +78,7 @@ outputs/                   sample outputs, eval reports, screenshots
 - `docs/decisions/NNN-*.md`: one ADR per significant choice (context, decision, alternatives, tradeoffs)
 - `docs/build-log.md`: dated, real problems: symptom → cause → fix
 - `prompts/*.yaml`: never hardcode prompts in code
-- `docs/diagrams/`: Mermaid diagrams (architecture, sequence, state, ER, deployment)
+- `docs/diagrams/`: D2 diagrams (sources in `docs/diagrams/src/`, rendered SVGs; see its README), never Mermaid
 
 ## Git branching (MUST follow)
 - **`main` always works.** Only finished, reviewed, owner-approved blocks are merged into it.

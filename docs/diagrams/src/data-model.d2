@@ -1,0 +1,126 @@
+# Ingest data model (src/placewise/migrations/001–003). Key columns only.
+vars: {d2-config: {theme-id: 0; pad: 40}}
+direction: down
+
+classes: {
+  table: {shape: sql_table; style: {fill: "#4F46E5"; stroke: "#EEF2FF"; font-color: "#FFFFFF"; font-size: 15}}
+  side: {shape: sql_table; style: {fill: "#059669"; stroke: "#ECFDF5"; font-color: "#FFFFFF"; font-size: 15}}
+  view: {shape: sql_table; style: {fill: "#64748B"; stroke: "#F8FAFC"; font-color: "#FFFFFF"; font-size: 15}}
+  group: {style: {fill: "#FFFFFF"; stroke: "#CBD5E1"; border-radius: 16; font-size: 16; bold: true}}
+  rel: {style: {stroke: "#4F46E5"}}
+  derived: {style: {stroke: "#94A3B8"; stroke-dash: 4}}
+}
+
+people: {
+  class: table
+  id: bigserial {constraint: primary_key}
+  display_name: text
+  email_norm: "text (unique if set)"
+  phone_norm: text
+}
+
+resume_files: {
+  class: table
+  id: bigserial {constraint: primary_key}
+  person_id: bigint {constraint: foreign_key}
+  sha256: "text unique"
+  source: "seed | upload"
+  source_ref: text
+  storage_path: text
+  status: "processed | needs_attention"
+  quality: "polished | flawed | unusable | adversarial"
+  quality_issues: "text[]"
+  parse_info: "jsonb (findings, notes)"
+  is_current: "bool (one per person)"
+}
+
+profiles: {
+  class: table
+  resume_file_id: bigint {constraint: [primary_key; foreign_key]}
+  person_id: bigint {constraint: foreign_key}
+  data: "jsonb (full profile)"
+  discipline: text
+  metro: text
+  years_experience: "real (from dates)"
+  license_codes: "text[] e.g. PE:TX"
+  software: "text[]"
+  sectors: "text[]"
+  blind_text: "text (no identity)"
+  model: text
+  prompt_version: int
+}
+
+chunks: {
+  class: table
+  id: bigserial {constraint: primary_key}
+  resume_file_id: bigint {constraint: foreign_key}
+  person_id: bigint {constraint: foreign_key}
+  section: "summary | job | credentials | skills | education"
+  content: text
+  embedding: "vector(1024) HNSW"
+  tsv: "tsvector GIN"
+}
+
+ops: "Queue · cache · cost log" {
+  class: group
+  ingest_jobs: {
+    class: side
+    id: bigserial {constraint: primary_key}
+    source: text
+    source_ref: "text (unique with source)"
+    payload: jsonb
+    status: "queued | running | done | ..."
+    attempts: "int (max 3)"
+    not_before: timestamptz
+    locked_by: text
+    locked_at: timestamptz
+    resume_file_id: bigint {constraint: foreign_key}
+    result: jsonb
+    error: text
+  }
+
+  extraction_cache: {
+    class: side
+    sha256: "text (of clean text)" {constraint: primary_key}
+    model: text {constraint: primary_key}
+    prompt_version: int {constraint: primary_key}
+    profile: jsonb
+    cost_usd: numeric
+  }
+
+  llm_calls: {
+    class: side
+    id: bigserial {constraint: primary_key}
+    run_ref: text
+    step: "text (ingest.extract)"
+    model: text
+    input_tokens: int
+    output_tokens: int
+    latency_ms: int
+    cost_usd: "numeric (spend cap sums today)"
+    status: "ok | invalid_output | error"
+  }
+}
+
+views: "Views (what later blocks read)" {
+  class: group
+  current_candidates: "current_candidates (view)" {
+    class: view
+    person_id: bigint
+    resume_file_id: bigint
+    "profile filter columns": "discipline, metro, years, license_codes, ..."
+    quality: text
+  }
+
+  current_chunks: "current_chunks (view)" {
+    class: view
+    "chunks.*": "only rows of is_current files"
+  }
+}
+
+people.id <- resume_files.person_id {class: rel}
+resume_files.id <- profiles.resume_file_id {class: rel}
+resume_files.id <- chunks.resume_file_id {class: rel}
+resume_files.id <- ops.ingest_jobs.resume_file_id {class: rel}
+profiles -> views.current_candidates: "people + current file + profile" {class: derived}
+chunks -> views.current_chunks: "filter: is_current" {class: derived}

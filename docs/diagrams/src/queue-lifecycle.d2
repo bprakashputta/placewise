@@ -1,0 +1,37 @@
+# Lifecycle of one ingest_jobs row (src/placewise/ingest/queue.py, src/placewise/worker.py).
+vars: {d2-config: {theme-id: 0; pad: 40}}
+direction: down
+
+classes: {
+  state: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; border-radius: 22; font-color: "#1E1B4B"; stroke-width: 2; font-size: 16}}
+  ok: {style: {fill: "#ECFDF5"; stroke: "#059669"; border-radius: 22; font-color: "#064E3B"; stroke-width: 2; font-size: 16}}
+  warn: {style: {fill: "#FEF2F2"; stroke: "#DC2626"; border-radius: 22; font-color: "#7F1D1D"; stroke-width: 2; font-size: 16}}
+  start: {shape: circle; width: 22; height: 22; label: ""; style: {fill: "#334155"; stroke: "#334155"}}
+  retry: {style: {stroke: "#94A3B8"; stroke-dash: 4; font-color: "#475569"}}
+}
+
+start: {class: start}
+
+queued: "queued\nwaits until not_before" {class: state}
+running: "running\nlocked_by = worker slot\nattempts + 1" {class: state}
+
+finals: "Final states" {
+  style: {fill: "#FFFFFF"; stroke: "#CBD5E1"; border-radius: 16; font-size: 15; bold: true}
+  done: "done\nprofile + chunks stored" {class: ok}
+  duplicate: "duplicate\nsame bytes seen before" {class: ok}
+  needs_attention: "needs_attention\nscan / corrupt file" {class: warn}
+  failed: "failed\nerror kept" {class: warn}
+}
+
+start -> queued: "enqueue\nidempotent per (source, source_ref)"
+queued -> running: "claim\nFOR UPDATE SKIP LOCKED"
+
+running -> finals.done
+running -> finals.duplicate
+running -> finals.needs_attention
+running -> finals.failed: "error, no attempts left (3)\nor stale with no attempts left"
+
+queued <- running: "retry: error or 8-min job timeout,\nattempts left · backoff 20 s, then 40 s" {class: retry}
+queued <- running: "defer: daily spend cap\n+30 min, attempt not counted" {class: retry}
+queued <- running: "reclaim: locked > 10 min\n(worker crashed)" {class: retry}
+queued <- finals.failed: "POST /api/ingest/jobs/retry-failed\nattempts reset to 0" {class: retry}
