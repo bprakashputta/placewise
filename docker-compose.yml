@@ -49,8 +49,42 @@ services:
       - ./data/seed/public:/app/data/seed/public:ro
       - ./data/seed/resumes:/app/data/seed/resumes:ro
       - ./outputs/samples:/app/outputs/samples:ro
+      - storage:/app/storage
+      - ./prompts:/app/prompts:ro
     ports:
       - "127.0.0.1:8000:8000"   # local only, for API docs at http://localhost:8000/docs
+    restart: unless-stopped
+
+  # Ingest worker: claims jobs from the Postgres queue. Scale with: docker compose up -d --scale worker=3
+  worker:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "-m", "placewise.worker"]
+    healthcheck:
+      disable: true   # the image's HTTP healthcheck doesn't apply: workers serve no HTTP
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in .env}
+      DAILY_LLM_SPEND_CAP_USD: ${DAILY_LLM_SPEND_CAP_USD:-10}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+      ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
+      VOYAGE_API_KEY: ${PLACEWISE_VOYAGE_TEST_API_KEY:-}
+      LANGSMITH_API_KEY: ${PLACEWISE_LANGSMITH_TEST_API_KEY:-}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-true}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-placewise}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - storage:/app/storage
+      - ./prompts:/app/prompts:ro
+      # Resume files only. The answer key (data/seed/truth) is deliberately NOT mounted.
+      - ./data/seed/resumes:/app/data/seed/resumes:ro
+    stop_grace_period: 60s
     restart: unless-stopped
 
   # On-demand tool, not a long-running service:  docker compose run --rm seed facts --count 500
@@ -64,8 +98,14 @@ services:
     command: ["--help"]
     environment:
       PLACEWISE_DATA_DIR: /app/data
+      # Evals compare what the app stored against the answer key (this container is the only one with both)
+      DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise
+      APP_SECRET_KEY: ${APP_SECRET_KEY:-unused-in-seed}
       ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
-      LANGSMITH_TRACING: "false"   # test-data generation is not product traffic; saves trace quota
+      LANGSMITH_TRACING: ${SEED_TRACING:-false}   # off for data generation; evals turn it on (SEED_TRACING=true)
+      LANGSMITH_API_KEY: ${PLACEWISE_LANGSMITH_TEST_API_KEY:-}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-placewise}
     volumes:
       - ./src:/app/src
       - ./data:/app/data
@@ -94,3 +134,4 @@ services:
 
 volumes:
   db_data:
+  storage:

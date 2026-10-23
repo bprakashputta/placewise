@@ -11,3 +11,4 @@ data/seed/public/
 
 # Agent worktrees (isolated parallel work)
 .claude/worktrees/
+outputs/evals/

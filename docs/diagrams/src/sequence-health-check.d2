@@ -1,0 +1,44 @@
+# System status page: health check sequence (web/src/app/system-status.tsx, src/placewise/main.py, health.py).
+vars: {d2-config: {theme-id: 0; pad: 30}}
+
+shape: sequence_diagram
+
+classes: {
+  actor: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; font-color: "#1E1B4B"; stroke-width: 2; font-size: 15}}
+  ext: {style: {fill: "#FFF7ED"; stroke: "#EA580C"; font-color: "#7C2D12"; stroke-width: 2; font-size: 15}}
+  data: {style: {fill: "#ECFDF5"; stroke: "#059669"; font-color: "#064E3B"; stroke-width: 2; font-size: 15}}
+  reply: {style: {stroke-dash: 3}}
+  bad: {style: {stroke: "#DC2626"; stroke-dash: 3; font-color: "#7F1D1D"}}
+}
+
+b: "Browser" {class: actor}
+w: "web (Next.js)" {class: actor}
+a: "api (FastAPI)" {class: actor}
+c: "LangSmith cache\n(in api process)" {class: data}
+l: "LangSmith" {class: ext}
+d: "db (Postgres)" {class: data}
+
+b -> w: "GET /api/health (same origin)"
+w -> a: "rewrite → http://api:8000/api/health"
+a -> c: "check_langsmith() under asyncio.Lock"
+
+fresh: "Cache fresh (60 s if ok, 15 s if failed)" {
+  c -> a: "cached result" {class: reply}
+}
+stale: "Cache stale or empty" {
+  a -> l: "list_projects(limit=1) in a thread, 10 s timeout"
+  l -> a: "ok · error · timeout" {class: reply}
+  a -> c: "store result with TTL"
+}
+
+a -> d: "SELECT extversion FROM pg_extension (3 s pool wait)"
+up: "db up" {
+  d -> a: "pgvector version" {class: reply}
+}
+down: "db down" {
+  d -> a: "error after ~3 s → 'cannot connect'" {class: bad}
+}
+
+a -> w: "200 if all ok, else 503 (same JSON body)" {class: reply}
+w -> b: "response passed through" {class: reply}
+b."Shows each check as Connected or Down"

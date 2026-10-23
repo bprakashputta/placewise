@@ -1,0 +1,51 @@
+# Docker Compose deployment: services, ports, volumes (docker-compose.yml).
+vars: {d2-config: {theme-id: 0; pad: 30}}
+direction: down
+
+classes: {
+  svc: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; border-radius: 10; font-color: "#1E1B4B"; stroke-width: 2; font-size: 15}}
+  store: {shape: cylinder; style: {fill: "#ECFDF5"; stroke: "#059669"; font-color: "#064E3B"; stroke-width: 2; font-size: 14}}
+  port: {shape: oval; style: {fill: "#F1F5F9"; stroke: "#64748B"; font-color: "#334155"; font-size: 14}}
+  bind: {style: {fill: "#F8FAFC"; stroke: "#94A3B8"; border-radius: 8; font-color: "#334155"; font-size: 13}}
+  planned: {style: {fill: "#F8FAFC"; stroke: "#94A3B8"; stroke-dash: 4; border-radius: 10; font-color: "#64748B"; font-size: 14}}
+  group: {style: {fill: "#FFFFFF"; stroke: "#CBD5E1"; border-radius: 16; font-size: 17; bold: true}}
+}
+
+host: "Host machine (ports bind to 127.0.0.1 only)" {
+  class: group
+  p3000: "127.0.0.1:3000" {class: port}
+  p8000: "127.0.0.1:8000\n(API docs in dev)" {class: port}
+}
+
+net: "Docker network: placewise_default" {
+  class: group
+  web: "web :3000\nnode:22-alpine\nmount: ./web" {class: svc}
+  api: "api :8000\nuv python3.12 · user app\nmounts: ./src · ./prompts (ro)\nseed resumes + public (ro)" {class: svc}
+  worker: "worker ×N (no HTTP)\nsame image as api\nmounts: ./src · ./prompts (ro)\nseed resumes (ro)" {class: svc}
+  db: "db :5432\npgvector 0.8.1-pg17\nnot published" {class: store}
+  tunnel: "tunnel (Block 9)" {class: planned}
+}
+
+tools: "On demand (profile: tools)" {
+  class: group
+  seed: "seed\ndocker compose run --rm seed …\nsynthetic data · evals" {class: svc}
+  data: "./data (incl. seed/truth)\n./outputs\nanswer key: mounted here only" {class: bind}
+  seed -> data
+}
+
+vols: "Named volumes" {
+  class: group
+  db_data: "db_data\n→ /var/lib/postgresql/data" {class: store}
+  storage: "storage\n→ /app/storage (uploads)" {class: store}
+}
+
+host.p3000 -> net.web
+host.p8000 -> net.api
+net.tunnel -> net.web: "public link" {style.stroke-dash: 4}
+net.web -> net.api: "/api/* only"
+net.api -> net.db
+net.worker -> net.db
+net.db -- tools.seed: "evals read" {style.stroke-dash: 3}
+net.db -> vols.db_data
+net.api -> vols.storage
+net.worker -> vols.storage

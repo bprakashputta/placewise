@@ -12,3 +12,4 @@ outputs/
 evals/results/
 n8n/
 docs/
+!prompts/

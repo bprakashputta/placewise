@@ -1,0 +1,49 @@
+# Synthetic data pipeline (Block 1): seed CLI → files + answer key → dev Seed page.
+vars: {d2-config: {theme-id: 0; pad: 30}}
+
+shape: sequence_diagram
+
+classes: {
+  actor: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; font-color: "#1E1B4B"; stroke-width: 2; font-size: 15}}
+  ext: {style: {fill: "#FFF7ED"; stroke: "#EA580C"; font-color: "#7C2D12"; stroke-width: 2; font-size: 15}}
+  data: {style: {fill: "#ECFDF5"; stroke: "#059669"; font-color: "#064E3B"; stroke-width: 2; font-size: 15}}
+  reply: {style: {stroke-dash: 3}}
+}
+
+o: "Owner" {shape: person; class: actor}
+s: "seed container\n(CLI)" {class: actor}
+h: "Claude Haiku 5.5" {class: ext}
+t: "data/seed/truth\n(answer key)" {class: data}
+g: "generated/\n+ resumes/" {class: data}
+p: "data/seed/public" {class: data}
+a: "api (dev only)" {class: actor}
+w: "Seed page" {class: actor}
+
+o -> s: "facts --count 500 --seed 42"
+s -> t: "candidates.jsonl (ground truth, no LLM)"
+
+o -> s: "write"
+loop: "Each candidate, max 3 attempts" {
+  s -> h: "facts + prompt v5"
+  h -> s: "StructuredResume" {class: reply}
+  s -> s: "structural check + text fact check\n(on failure: retry with the problems listed)"
+}
+s -> g: "resumes.jsonl (accepted only)"
+
+o -> s: "render"
+s -> s: "code noise (bullets, flagged typos)"
+s -> g: "PDF / DOCX / TXT + previews + files.jsonl"
+
+o -> s: "job-orders"
+s -> t: "targeted candidates, job_orders.jsonl"
+s -> h: "spec as required / preferred / nice to have"
+h -> s: "recruiter call notes" {class: reply}
+s -> t: "relevance.jsonl (graded from facts)"
+s -> p: "publish aggregates + dev-split showcase"
+
+w -> a: "GET /api/dev/seed/status (polls)"
+a -> p: "read (ro)"
+a -> w: "progress, stats, showcase, job orders" {class: reply}
+w -> a: "GET /api/dev/seed/files/{id}/view"
+a -> g: "read resumes/ (ro)"
+a -> w: "PDF in the in-page viewer" {class: reply}
