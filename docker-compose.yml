@@ -50,6 +50,7 @@ services:
       - ./data/seed/resumes:/app/data/seed/resumes:ro
       - ./outputs/samples:/app/outputs/samples:ro
       - storage:/app/storage
+      - ./prompts:/app/prompts:ro
     ports:
       - "127.0.0.1:8000:8000"   # local only, for API docs at http://localhost:8000/docs
     restart: unless-stopped
@@ -78,6 +79,7 @@ services:
     volumes:
       - ./src:/app/src
       - storage:/app/storage
+      - ./prompts:/app/prompts:ro
       # Resume files only. The answer key (data/seed/truth) is deliberately NOT mounted.
       - ./data/seed/resumes:/app/data/seed/resumes:ro
     stop_grace_period: 60s
@@ -95,7 +97,10 @@ services:
     environment:
       PLACEWISE_DATA_DIR: /app/data
       ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
-      LANGSMITH_TRACING: "false"   # test-data generation is not product traffic; saves trace quota
+      LANGSMITH_TRACING: ${SEED_TRACING:-false}   # off for data generation; evals turn it on (SEED_TRACING=true)
+      LANGSMITH_API_KEY: ${PLACEWISE_LANGSMITH_TEST_API_KEY:-}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-placewise}
     volumes:
       - ./src:/app/src
       - ./data:/app/data
