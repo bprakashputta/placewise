@@ -1,12 +1,12 @@
 import { cn } from "@/lib/utils";
 
-// Placewise mark: a map pin on an indigo tile.
+// Placewise mark: a map pin on a gradient indigo tile.
 export function LogoMark({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        "flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand text-white shadow-sm",
+        "flex size-8 shrink-0 items-center justify-center rounded-[9px] bg-brand-gradient text-white shadow-[inset_0_1px_0_0_oklch(1_0_0/0.25),0_1px_2px_0_oklch(0.3_0.15_274/0.35),0_4px_12px_-4px_oklch(0.5_0.2_274/0.5)]",
         className,
       )}
     >

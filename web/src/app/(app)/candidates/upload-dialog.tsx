@@ -113,7 +113,8 @@ function Progress({ job, stalled }: { job?: IngestJob; stalled: boolean }) {
   );
 }
 
-export function UploadDialog() {
+/** `trigger` replaces the default "Upload resume" button (e.g. a dashboard quick-action tile). */
+export function UploadDialog({ trigger }: { trigger?: React.ReactNode } = {}) {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -183,9 +184,9 @@ export function UploadDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button>
+        {trigger ?? (<Button>
           <FileUp aria-hidden="true" /> Upload resume
-        </Button>
+        </Button>)}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>

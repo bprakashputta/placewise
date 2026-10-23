@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { CircleAlert, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -56,18 +56,14 @@ export function LoginForm() {
   }
 
   return (
-    <Card>
-      <CardHeader className="text-center">
-        <CardTitle className="text-lg">Sign in</CardTitle>
-        <CardDescription>Use your Placewise account to continue.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <Card className="shadow-md">
+      <CardContent className="pt-1">
         {/* method="post": if the form is submitted before hydration, the password must not land in a GET URL. */}
         <form onSubmit={onSubmit} method="post" className="space-y-4" noValidate>
           {error && (
             <div
               role="alert"
-              className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              className="flex items-center gap-2 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger-strong"
             >
               <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
               {error}
@@ -96,7 +92,7 @@ export function LoginForm() {
               aria-invalid={error ? true : undefined}
             />
           </div>
-          <Button type="submit" className="h-9 w-full" disabled={pending}>
+          <Button type="submit" size="lg" className="w-full" disabled={pending}>
             {pending && <Loader2 className="animate-spin" aria-hidden="true" />}
             {pending ? "Signing in…" : "Sign in"}
           </Button>

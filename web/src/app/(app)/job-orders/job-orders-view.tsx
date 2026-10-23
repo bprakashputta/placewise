@@ -24,23 +24,23 @@ const COLUMNS = [
 ];
 
 function RunStatus({ row }: { row: JobOrderRow }) {
-  if (!row.last_run_status) return <span className="text-sm text-muted-foreground">Not run yet</span>;
+  if (!row.last_run_status) return <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground ring-1 ring-border ring-inset"><span className="size-1.5 rounded-full bg-muted-foreground/50" aria-hidden="true" />Not run yet</span>;
   if (row.last_run_status === "running")
     return (
-      <span className="flex items-center gap-1.5 text-sm">
-        <Loader2 className="size-3.5 animate-spin text-brand" aria-hidden="true" /> Matching…
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-strong ring-1 ring-brand/15 ring-inset">
+        <Loader2 className="size-3 animate-spin" aria-hidden="true" /> Matching…
       </span>
     );
   if (row.last_run_status === "failed")
     return (
-      <span className="flex items-center gap-1.5 text-sm text-destructive">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-danger-soft px-2 py-0.5 text-xs font-medium text-danger-strong ring-1 ring-danger/20 ring-inset">
         <CircleX className="size-3.5" aria-hidden="true" /> Failed
       </span>
     );
   return (
-    <span className="flex items-center gap-1.5 text-sm">
-      <CircleCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-      Done <span className="text-muted-foreground">· {relativeTime(row.last_run_at)}</span>
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success-strong ring-1 ring-success/25 ring-inset">
+      <CircleCheck className="size-3" aria-hidden="true" />
+      Done <span className="font-normal opacity-75">· {relativeTime(row.last_run_at)}</span>
     </span>
   );
 }
@@ -53,6 +53,7 @@ export function JobOrdersView() {
     <div className="space-y-6">
       <PageHeader
         title="Job orders"
+        icon={BriefcaseBusiness}
         description="Searches your team is working, each with a ranked, evidence-backed shortlist."
         actions={<NewJobOrderDialog />}
       />
@@ -61,10 +62,10 @@ export function JobOrdersView() {
       ) : (
         <Card className="gap-0 overflow-hidden py-0">
           <Table>
-            <TableHeader className="bg-muted/40">
+            <TableHeader className="bg-muted/50">
               <TableRow className="hover:bg-transparent">
                 {COLUMNS.map((c) => (
-                  <TableHead key={c.label} className={`h-10 px-4 text-xs font-medium tracking-wide text-muted-foreground uppercase ${c.className ?? ""}`}>
+                  <TableHead key={c.label} className={`h-10 px-4 text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase ${c.className ?? ""}`}>
                     {c.label}
                   </TableHead>
                 ))}
@@ -96,7 +97,7 @@ export function JobOrdersView() {
                 const href = `/job-orders/${j.id}`;
                 return (
                   <TableRow key={j.id} className="cursor-pointer" onClick={() => router.push(href)}>
-                    <TableCell className="max-w-96 px-4 py-2.5 whitespace-normal">
+                    <TableCell className="max-w-96 px-4 py-3 whitespace-normal">
                       <Link href={href} onClick={(e) => e.stopPropagation()} className="font-medium hover:underline focus-visible:underline focus-visible:outline-none">
                         {j.title}
                       </Link>
@@ -111,7 +112,7 @@ export function JobOrdersView() {
                     </TableCell>
                     <TableCell className="px-4 text-right">
                       {j.last_run_status === "done" ? (
-                        <Badge className="bg-emerald-500/10 text-emerald-700 tabular-nums ring-1 ring-emerald-600/20 ring-inset dark:text-emerald-300">
+                        <Badge className="min-w-7 bg-success-soft text-success-strong tabular-nums ring-1 ring-success/25 ring-inset">
                           {j.submit_count ?? 0}
                         </Badge>
                       ) : (

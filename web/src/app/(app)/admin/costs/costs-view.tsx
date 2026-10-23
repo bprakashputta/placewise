@@ -85,7 +85,7 @@ export function CostsView() {
   const { data, loading, reload } = api;
   const error = user && !isAdmin ? new ApiError(403, "Admins only") : api.error;
 
-  const header = <PageHeader title="AI costs" description="Model and embedding spend per day, step and model." />;
+  const header = <PageHeader icon={CircleDollarSign} title="AI costs" description="Model and embedding spend per day, step and model." />;
 
   if (error && error.status !== 404) return <div className="space-y-6">{header}<ApiErrorState error={error} onRetry={reload} /></div>;
   if (error || (data && data.by_day.length === 0 && data.by_step_model.length === 0 && data.spent_today_usd === 0)) {

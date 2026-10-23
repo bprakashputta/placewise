@@ -23,8 +23,8 @@ export function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="rounded-full" aria-label={`Open user menu for ${user.display_name}`}>
-          <Avatar className="size-7">
-            <AvatarFallback className="bg-brand-soft text-xs font-medium text-brand">
+          <Avatar className="size-8">
+            <AvatarFallback className="bg-brand-gradient text-xs font-semibold text-white">
               {initials(user.display_name)}
             </AvatarFallback>
           </Avatar>

@@ -3,27 +3,27 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { issueLabel, qualityLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-// polished = green, flawed = amber, unusable = red, adversarial = fuchsia (docs/api-contract.md).
+// polished = success, flawed = warning, unusable = danger, adversarial = tamper (docs/api-contract.md).
 export const QUALITY_STYLES: Record<string, { badge: string; dot: string; bar: string }> = {
   polished: {
-    badge: "bg-emerald-500/10 text-emerald-700 ring-emerald-600/20 dark:text-emerald-300 dark:ring-emerald-400/25",
-    dot: "bg-emerald-500",
-    bar: "bg-emerald-500",
+    badge: "bg-success-soft text-success-strong ring-success/25",
+    dot: "bg-success",
+    bar: "bg-success",
   },
   flawed: {
-    badge: "bg-amber-500/10 text-amber-800 ring-amber-600/25 dark:text-amber-300 dark:ring-amber-400/25",
-    dot: "bg-amber-500",
-    bar: "bg-amber-500",
+    badge: "bg-warning-soft text-warning-strong ring-warning/30",
+    dot: "bg-warning",
+    bar: "bg-warning",
   },
   unusable: {
-    badge: "bg-red-500/10 text-red-700 ring-red-600/20 dark:text-red-300 dark:ring-red-400/25",
-    dot: "bg-red-500",
-    bar: "bg-red-500",
+    badge: "bg-danger-soft text-danger-strong ring-danger/25",
+    dot: "bg-danger",
+    bar: "bg-danger",
   },
   adversarial: {
-    badge: "bg-fuchsia-500/10 text-fuchsia-700 ring-fuchsia-600/20 dark:text-fuchsia-300 dark:ring-fuchsia-400/25",
-    dot: "bg-fuchsia-500",
-    bar: "bg-fuchsia-500",
+    badge: "bg-tamper-soft text-tamper-strong ring-tamper/25",
+    dot: "bg-tamper",
+    bar: "bg-tamper",
   },
 };
 

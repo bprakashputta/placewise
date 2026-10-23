@@ -61,7 +61,8 @@ function Stages() {
   );
 }
 
-export function NewJobOrderDialog() {
+/** `trigger` replaces the default "New job order" button (e.g. a dashboard quick-action tile). */
+export function NewJobOrderDialog({ trigger }: { trigger?: React.ReactNode } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState("");
@@ -103,9 +104,9 @@ export function NewJobOrderDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button>
+        {trigger ?? (<Button>
           <Plus aria-hidden="true" /> New job order
-        </Button>
+        </Button>)}
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={submit} className="grid gap-4">
