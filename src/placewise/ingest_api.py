@@ -52,3 +52,13 @@ async def enqueue_seed(limit: int = 0, folders: str = "") -> dict:
             if await queue.enqueue(conn, "seed", folder, {"folder": folder}):
                 added += 1
     return {"requested": len(wanted), "queued": added, "already_queued": len(wanted) - added}
+
+
+@router.post("/jobs/retry-failed")
+async def retry_failed() -> dict:
+    """Put failed jobs back in the queue (e.g. after fixing a configuration problem)."""
+    async with pool().connection() as conn:
+        cur = await conn.execute(
+            """UPDATE ingest_jobs SET status = 'queued', attempts = 0, not_before = now(), error = NULL,
+                      updated_at = now() WHERE status = 'failed'""")
+        return {"requeued": cur.rowcount}

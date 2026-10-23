@@ -1,9 +1,19 @@
 """Database connection pool (async, shared by every request)."""
+from pgvector.psycopg import register_vector_async
 from psycopg_pool import AsyncConnectionPool
 
 from .config import get_settings
 
 _pool: AsyncConnectionPool | None = None
+
+
+async def _configure(conn) -> None:
+    """Teach each connection the pgvector type (only once the extension exists)."""
+    try:
+        await register_vector_async(conn)
+    except Exception:
+        pass  # before migration 001 the vector type doesn't exist yet
+    await conn.commit()
 
 
 async def open_pool() -> AsyncConnectionPool:
@@ -16,6 +26,7 @@ async def open_pool() -> AsyncConnectionPool:
             max_size=s.db_pool_max,
             open=False,
             kwargs={"connect_timeout": 5},
+            configure=_configure,
         )
         # wait=False: the API starts even if the database is still booting.
         # /health reports the database as down until it can connect.

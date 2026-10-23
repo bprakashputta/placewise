@@ -1,11 +1,13 @@
-"""Ingest pipeline entry point. Step A placeholder: confirms the worker can locate the file.
-Steps B-D replace this with the LangGraph ingest graph (parse → screen → extract → validate →
-blind → chunk → embed → store)."""
+"""Ingest pipeline entry point used by the worker: runs the LangGraph ingest graph for one job."""
 from __future__ import annotations
 
-from .sources import resolve_file
+from .graph import GRAPH
 
 
 async def run_job(job: dict) -> tuple[str, dict, int | None]:
-    path = resolve_file(job)
-    return "done", {"placeholder": True, "file": path.name, "bytes": path.stat().st_size}, None
+    final = await GRAPH.ainvoke(
+        {"job": job},
+        config={"run_name": f"ingest:{job['source_ref']}", "tags": ["ingest", job["source"]],
+                "metadata": {"job_id": job["id"], "source": job["source"], "source_ref": job["source_ref"]}})
+    outcome = final["outcome"]
+    return outcome["status"], outcome, outcome.get("resume_file_id")
