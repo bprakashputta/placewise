@@ -196,9 +196,9 @@ def score(spec: JobSpec, verdicts: list[RequirementVerdict]) -> tuple[float, str
         num += w * VALUE[v.verdict if v else "unknown"]
         if r.priority == "must" and r.kind in ("license", "discipline") and v and v.verdict == "not_met":
             gate_fail = True
-        # A must-have license held only in another state (or a relocation instead of local) is never an
-        # automatic "submit": the recruiter must confirm it first.
-        if r.priority == "must" and r.kind in ("license", "location") and v and v.verdict == "partial":
+        # A must-have license held only in another state, a relocation instead of local, or up to a year
+        # short of the experience minimum is never an automatic "submit": the recruiter confirms it first.
+        if r.priority == "must" and r.kind in ("license", "location", "years") and v and v.verdict == "partial":
             gate_partial = True
     s = round(100 * num / den, 1) if den else 0.0
     if gate_fail:

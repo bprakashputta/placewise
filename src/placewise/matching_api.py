@@ -91,6 +91,9 @@ async def start_match(job_id: int, user: dict = Depends(current_user)) -> dict:
 async def matches(job_id: int, run_id: str | None = None) -> dict:
     async with pool().connection() as conn:
         cur = conn.cursor(row_factory=dict_row)
+        await cur.execute("SELECT 1 FROM job_orders WHERE id = %s", (job_id,))
+        if not await cur.fetchone():
+            raise HTTPException(404, "job order not found")
         await cur.execute(
             """SELECT run_id, status, filters, relaxed, candidates, cost_usd::float AS cost_usd, error, started_at,
                       finished_at FROM match_runs WHERE job_order_id = %s AND (%s::text IS NULL OR run_id = %s)
@@ -121,8 +124,11 @@ class Decision(BaseModel):
 async def decide(match_id: int, body: Decision, user: dict = Depends(current_user)) -> dict:
     async with pool().connection() as conn:
         cur = await conn.execute(
-            "UPDATE matches SET status=%s, decided_by=%s, decided_at=now() WHERE id=%s RETURNING id",
-            (body.status, user["id"], match_id))
+            """UPDATE matches SET status=%s,
+                   decided_by = CASE WHEN %s = 'proposed' THEN NULL ELSE %s END,
+                   decided_at = CASE WHEN %s = 'proposed' THEN NULL ELSE now() END
+               WHERE id=%s RETURNING id""",
+            (body.status, body.status, user["id"], body.status, match_id))
         if not await cur.fetchone():
             raise HTTPException(404, "match not found")
     return {"id": match_id, "status": body.status}

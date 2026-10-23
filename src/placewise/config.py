@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     daily_llm_spend_cap_usd: float = 10.0
     cookie_secure: bool = False   # True when served over HTTPS (the public tunnel link)
+    trust_cloudflare_ip: bool = False   # True only when traffic arrives through the Cloudflare tunnel
 
     db_pool_min: int = 1
     db_pool_max: int = 10

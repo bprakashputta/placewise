@@ -86,7 +86,7 @@ def _client_ip(request: Request) -> str:
     appended; earlier entries are client-controlled and could be spoofed to dodge the rate limit.
     Behind the Cloudflare tunnel, CF-Connecting-IP is set by Cloudflare itself."""
     cf = request.headers.get("cf-connecting-ip")
-    if cf:
+    if cf and get_settings().trust_cloudflare_ip:   # only behind our Cloudflare tunnel; otherwise spoofable
         return cf.strip()
     fwd = request.headers.get("x-forwarded-for")
     if fwd:

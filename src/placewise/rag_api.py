@@ -1,6 +1,6 @@
 """RAG API: ask questions (cited answers) and smart candidate search. Requires a signed-in user."""
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .ingest.spend import SpendCapReached
 from .rag.graph import ask as run_ask
@@ -20,6 +20,13 @@ def clean_excerpt(content: str, n: int = 260) -> str:
 
 class AskBody(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
+
+    @field_validator("question")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if len(v.strip()) < 3:   # whitespace-only questions must never reach the paid model
+            raise ValueError("question is empty")
+        return v.strip()
     filters: Filters | None = None   # optional: override the filters the model would infer
 
 
