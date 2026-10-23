@@ -1,0 +1,14 @@
+# Keep secrets, git history and unrelated folders out of the api build context.
+.env
+.env.*
+!.env.example
+.git
+.venv
+**/__pycache__
+**/*.pyc
+web/
+data/
+outputs/
+evals/results/
+n8n/
+docs/

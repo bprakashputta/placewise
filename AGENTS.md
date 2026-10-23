@@ -85,7 +85,13 @@ outputs/                   sample outputs, eval reports, screenshots
 - Never force-push `main`. Never merge a block whose tests fail.
 - Docs, prompts and diagrams for a block go on that block's branch, so code and docs merge together.
 
+## Everything runs in Docker (MUST follow)
+- **All services run as containers:** db (Postgres + pgvector, data in a named Docker volume), api, worker, web, n8n, mailpit, tunnel.
+- **Never use the host machine's Postgres, Python, Node or packages.** Run installs, tests, migrations and scripts inside containers (`docker compose exec api ...`, `docker compose run --rm ...`).
+- The host only needs Docker Desktop, git and an editor.
+- The container db is **not published on 5432** (the host has its own Postgres there). Publish it on **5433** only for debugging.
+
 ## Conventions
-- Python 3.12, managed with `uv`, run inside Docker. Pydantic for every LLM output schema.
+- Python 3.12, managed with `uv` inside the containers. Pydantic for every LLM output schema.
 - Secrets live only in `.env` (gitignored). Never commit keys. `.env.example` lists the variable names.
 - Commit after each block with a clear message.
