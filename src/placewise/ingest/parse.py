@@ -116,15 +116,35 @@ def parse_docx(data: bytes) -> Parsed:
         doc = Document(io.BytesIO(data))
     except Exception as e:
         return Parsed("unusable", "docx", reason=f"corrupt DOCX ({type(e).__name__})")
-    parts = [p.text for p in doc.paragraphs]
+    visible, hidden = [], []
+
+    def run_hidden(run) -> bool:
+        f = run.font
+        if f.hidden:
+            return True
+        if f.size is not None and f.size.pt < 3:
+            return True
+        rgb = f.color.rgb if f.color is not None and f.color.type is not None else None
+        return rgb is not None and str(rgb).upper() in ("FFFFFF", "FEFEFE", "FDFDFD")
+
+    def add(paragraph) -> None:
+        vis = "".join(r.text for r in paragraph.runs if not run_hidden(r))
+        hid = "".join(r.text for r in paragraph.runs if run_hidden(r))
+        visible.append(vis if paragraph.runs else paragraph.text)
+        if hid.strip():
+            hidden.append(hid.strip())
+
+    for p in doc.paragraphs:
+        add(p)
     for table in doc.tables:
         for row in table.rows:
             for cell in row.cells:
-                parts.extend(p.text for p in cell.paragraphs)
-    text = "\n".join(parts).strip()
+                for p in cell.paragraphs:
+                    add(p)
+    text = "\n".join(visible).strip()
     if len(text) < 40:
-        return Parsed("unusable", "docx", text=text, reason="DOCX has almost no text")
-    return Parsed("ok", "docx", text=text)
+        return Parsed("unusable", "docx", text=text, hidden_text=" ".join(hidden), reason="DOCX has almost no text")
+    return Parsed("ok", "docx", text=text, hidden_text=" ".join(hidden))
 
 
 def parse_txt(data: bytes) -> Parsed:

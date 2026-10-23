@@ -20,11 +20,13 @@ def norm_phone(p: str | None) -> str | None:
     return digits[-10:] if len(digits) >= 10 else None
 
 
-async def find_by_sha(sha: str) -> int | None:
+async def find_by_sha(sha: str, with_ref: bool = False):
     async with pool().connection() as conn:
-        cur = await conn.execute("SELECT id FROM resume_files WHERE sha256 = %s", (sha,))
+        cur = await conn.execute("SELECT id, source, source_ref FROM resume_files WHERE sha256 = %s", (sha,))
         row = await cur.fetchone()
-    return row[0] if row else None
+    if not row:
+        return None
+    return tuple(row) if with_ref else row[0]
 
 
 async def store_unusable(meta: dict, parse_info: dict, issues: list[str], reason: str) -> int:
@@ -70,7 +72,7 @@ async def store_processed(meta: dict, parse_info: dict, v, chunks: list[dict], v
     try:
         return await _store_processed(meta, parse_info, v, chunks, vectors, blind, model, prompt_version)
     except errors.UniqueViolation as e:
-        if "resume_files_sha256_key" in str(e):
+        if getattr(e.diag, "constraint_name", None) == "resume_files_sha256_key":
             raise DuplicateFile(await find_by_sha(meta["sha256"])) from e
         raise
 
@@ -133,5 +135,5 @@ async def _store_processed(meta: dict, parse_info: dict, v, chunks: list[dict], 
                     """INSERT INTO chunks (resume_file_id, person_id, section, ordinal, content, embedding)
                        VALUES (%s,%s,%s,%s,%s,%s)""",
                     [(file_id, person_id, c["section"], c["ordinal"], c["content"], np.array(vec, dtype=np.float32))
-                     for c, vec in zip(chunks, vectors)])
+                     for c, vec in zip(chunks, vectors, strict=True)])
     return file_id, person_id, new_person

@@ -16,11 +16,12 @@ def migrate(database_url: str | None = None) -> list[str]:
     url = database_url or get_settings().database_url
     applied_now: list[str] = []
     with psycopg.connect(url, autocommit=True) as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations "
-                     "(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
-        # One runner at a time (e.g. api and worker starting together)
+        # Lock FIRST: concurrent CREATE TABLE IF NOT EXISTS can still collide in Postgres
+        # (api + several workers booting together on an empty database).
         conn.execute("SELECT pg_advisory_lock(727001)")
         try:
+            conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations "
+                         "(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
             done = {r[0] for r in conn.execute("SELECT version FROM schema_migrations")}
             for path in sorted(MIGRATIONS.glob("[0-9][0-9][0-9]_*.sql")):
                 if path.stem in done:

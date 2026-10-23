@@ -1,5 +1,5 @@
-"""Ingest API: queue status for everyone; bulk seed import in dev only.
-(File upload is added in step D, once the full pipeline exists.)"""
+"""Ingest API: queue status and retry for everyone (auth in Block 3); bulk seed import and reset in dev only.
+File upload lives in candidates_api.py."""
 from fastapi import APIRouter, HTTPException
 from psycopg.rows import dict_row
 

@@ -38,29 +38,42 @@ async def claim(conn: AsyncConnection, worker_id: str) -> dict | None:
 
 
 async def finish(conn: AsyncConnection, job_id: int, status: str, result: dict | None = None,
-                 resume_file_id: int | None = None, error: str | None = None) -> None:
-    await conn.execute(
+                 resume_file_id: int | None = None, error: str | None = None, worker: str | None = None) -> bool:
+    """Only the worker that holds the lock may finish the job (a reclaimed job's late finisher can't
+    overwrite the new owner's result). Returns False if the lock was lost."""
+    cur = await conn.execute(
         """UPDATE ingest_jobs SET status = %s, result = %s, resume_file_id = COALESCE(%s, resume_file_id),
-                  error = %s, locked_by = NULL, locked_at = NULL, updated_at = now() WHERE id = %s""",
-        (status, json.dumps(result) if result is not None else None, resume_file_id, error, job_id))
+                  error = %s, locked_by = NULL, locked_at = NULL, updated_at = now()
+           WHERE id = %s AND (%s::text IS NULL OR locked_by = %s)""",
+        (status, json.dumps(result) if result is not None else None, resume_file_id, error, job_id, worker, worker))
+    return cur.rowcount == 1
 
 
-async def fail(conn: AsyncConnection, job: dict, error: str) -> str:
-    """Retry later with backoff, or give up after max_attempts. Returns the new status."""
+async def fail(conn: AsyncConnection, job: dict, error: str, worker: str | None = None) -> str:
+    """Retry later with backoff, or give up after max_attempts. Returns the new status ('lost' if the
+    job was reclaimed by someone else meanwhile)."""
     if job["attempts"] < job["max_attempts"]:
         delay = RETRY_BASE_S * 2 ** (job["attempts"] - 1)
-        await conn.execute(
+        cur = await conn.execute(
             """UPDATE ingest_jobs SET status = 'queued', not_before = now() + make_interval(secs => %s),
-                      error = %s, locked_by = NULL, locked_at = NULL, updated_at = now() WHERE id = %s""",
-            (delay, error[:2000], job["id"]))
-        return "queued"
-    await finish(conn, job["id"], "failed", error=error[:2000])
-    return "failed"
+                      error = %s, locked_by = NULL, locked_at = NULL, updated_at = now()
+               WHERE id = %s AND (%s::text IS NULL OR locked_by = %s)""",
+            (delay, error[:2000], job["id"], worker, worker))
+        return "queued" if cur.rowcount == 1 else "lost"
+    ok = await finish(conn, job["id"], "failed", error=error[:2000], worker=worker)
+    return "failed" if ok else "lost"
 
 
 async def reclaim_stale(conn: AsyncConnection) -> int:
+    """Requeue jobs whose worker vanished. A job that has used all its attempts (e.g. a file that
+    crashes the worker every time) is marked failed instead of looping forever."""
     cur = await conn.execute(
-        """UPDATE ingest_jobs SET status = 'queued', locked_by = NULL, locked_at = NULL, updated_at = now()
+        """UPDATE ingest_jobs
+           SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+               error = CASE WHEN attempts >= max_attempts
+                            THEN 'worker stopped responding on every attempt (possible crash on this file)'
+                            ELSE error END,
+               locked_by = NULL, locked_at = NULL, updated_at = now()
            WHERE status = 'running' AND locked_at < now() - make_interval(mins => %s)""", (STALE_AFTER_MIN,))
     return cur.rowcount
 
@@ -70,10 +83,11 @@ async def summary(conn: AsyncConnection) -> dict:
     return {status: n for status, n in await cur.fetchall()}
 
 
-async def defer(conn: AsyncConnection, job: dict, minutes: int, reason: str) -> None:
+async def defer(conn: AsyncConnection, job: dict, minutes: int, reason: str, worker: str | None = None) -> None:
     """Pause a job without using up an attempt (e.g. the daily spend cap is reached)."""
     await conn.execute(
         """UPDATE ingest_jobs SET status = 'queued', attempts = GREATEST(attempts - 1, 0),
                   not_before = now() + make_interval(mins => %s), error = %s,
-                  locked_by = NULL, locked_at = NULL, updated_at = now() WHERE id = %s""",
-        (minutes, reason, job["id"]))
+                  locked_by = NULL, locked_at = NULL, updated_at = now()
+           WHERE id = %s AND (%s::text IS NULL OR locked_by = %s)""",
+        (minutes, reason, job["id"], worker, worker))

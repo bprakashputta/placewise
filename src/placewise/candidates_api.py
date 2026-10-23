@@ -155,7 +155,9 @@ async def upload(file: UploadFile) -> dict:
     if kind not in ("pdf", "docx", "txt"):
         raise HTTPException(415, "Only PDF, DOCX or TXT resumes are supported")
     sha = hashlib.sha256(data).hexdigest()
-    safe = re.sub(r"[^A-Za-z0-9._ -]", "_", Path(file.filename or f"resume.{kind}").name)[:120] or f"resume.{kind}"
+    safe = re.sub(r"[^A-Za-z0-9._ -]", "_", Path(file.filename or "").name)[:120].lstrip(". ")
+    if not safe or "." not in safe:
+        safe = f"resume.{kind}"  # also covers names like "." / ".." that would point at a directory
     folder = UPLOADS / sha
     folder.mkdir(parents=True, exist_ok=True)
     (folder / safe).write_bytes(data)

@@ -20,6 +20,9 @@ from .ingest.spend import SpendCapReached
 from .migrate import migrate
 
 CONCURRENCY = int(os.environ.get("WORKER_CONCURRENCY", "4"))
+# Must stay below queue.STALE_AFTER_MIN so a slow job is abandoned (and retried) before the
+# reaper could hand it to another worker.
+JOB_TIMEOUT_S = int(os.environ.get("JOB_TIMEOUT_S", str((queue.STALE_AFTER_MIN - 2) * 60)))
 IDLE_SLEEP_S = 2.0
 WORKER_ID = f"{socket.gethostname()}:{os.getpid()}"
 _stop = asyncio.Event()
@@ -33,9 +36,10 @@ async def process(job: dict) -> tuple[str, dict, int | None]:
 
 
 async def slot(n: int) -> None:
+    me = f"{WORKER_ID}#{n}"
     while not _stop.is_set():
         async with pool().connection() as conn:
-            job = await queue.claim(conn, f"{WORKER_ID}#{n}")
+            job = await queue.claim(conn, me)
         if job is None:
             try:
                 await asyncio.wait_for(_stop.wait(), timeout=IDLE_SLEEP_S)
@@ -44,19 +48,20 @@ async def slot(n: int) -> None:
             continue
         t0 = time.perf_counter()
         try:
-            status, result, file_id = await process(job)
+            status, result, file_id = await asyncio.wait_for(process(job), timeout=JOB_TIMEOUT_S)
             async with pool().connection() as conn:
-                await queue.finish(conn, job["id"], status, result, file_id)
+                if not await queue.finish(conn, job["id"], status, result, file_id, worker=me):
+                    status = f"{status} (lock lost: another worker owns this job now)"
             print(f"[{WORKER_ID}#{n}] job {job['id']} {job['source_ref']} → {status} "
                   f"({time.perf_counter() - t0:.1f}s)", flush=True)
         except SpendCapReached as e:  # not a failure: pause and re-check later
             async with pool().connection() as conn:
-                await queue.defer(conn, job, 30, str(e))
+                await queue.defer(conn, job, 30, str(e), worker=me)
             print(f"[{WORKER_ID}#{n}] job {job['id']} paused: {e}", flush=True)
         except Exception as e:  # unexpected error: retry with backoff, keep the traceback
             err = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=5)}"
             async with pool().connection() as conn:
-                new_status = await queue.fail(conn, job, err)
+                new_status = await queue.fail(conn, job, err, worker=me)
             print(f"[{WORKER_ID}#{n}] job {job['id']} error → {new_status}: {type(e).__name__}: {e}", flush=True)
 
 

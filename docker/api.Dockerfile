@@ -19,8 +19,12 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
-# Run as a non-root user.
-RUN useradd --create-home --uid 1000 app && chown -R app /app
+# Prompts are part of the app (mounted over in dev for live edits).
+COPY prompts ./prompts
+
+# Run as a non-root user. /app/storage must exist and be owned by the app user BEFORE a named
+# volume is mounted there, so fresh volumes inherit that ownership (uploads failed when it was root-owned).
+RUN useradd --create-home --uid 1000 app && mkdir -p /app/storage/uploads && chown -R app /app
 USER app
 
 EXPOSE 8000

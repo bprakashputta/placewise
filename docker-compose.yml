@@ -61,6 +61,8 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     command: ["python", "-m", "placewise.worker"]
+    healthcheck:
+      disable: true   # the image's HTTP healthcheck doesn't apply: workers serve no HTTP
     environment:
       APP_ENV: ${APP_ENV:-dev}
       DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise

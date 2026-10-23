@@ -10,6 +10,7 @@ small); only the path and hash do.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from typing import Any, TypedDict
 
@@ -35,6 +36,7 @@ class IngestState(TypedDict, total=False):
     job: dict
     meta: dict
     duplicate_of: int
+    own_file: bool
     parse_info: dict
     screen: dict
     clean_text: str
@@ -53,21 +55,29 @@ def _embed() -> VoyageAIEmbeddings:
 async def receive(state: IngestState) -> IngestState:
     job = state["job"]
     path = resolve_file(job)
-    data = path.read_bytes()
+    data = await asyncio.to_thread(path.read_bytes)
     sha = hashlib.sha256(data).hexdigest()
     root = SEED_RESUMES if job["source"] == "seed" else STORAGE
     meta = {"sha256": sha, "filename": path.name, "size": len(data), "media_type": sniff(data),
             "source": job["source"], "source_ref": job["source_ref"], "storage_path": str(path.relative_to(root))}
     out: IngestState = {"meta": meta}
-    existing = await find_by_sha(sha)
+    existing = await find_by_sha(sha, with_ref=True)
     if existing:
-        out["duplicate_of"] = existing
+        file_id, src, ref = existing
+        if (src, ref) == (job["source"], job["source_ref"]):
+            # Our own earlier attempt already stored this file (e.g. finish() failed after the commit)
+            out["outcome"] = {"status": "done", "resume_file_id": file_id, "reason": "already stored by this job"}
+            out["duplicate_of"] = file_id
+            out["own_file"] = True
+        else:
+            out["duplicate_of"] = file_id
     return out
 
 
 async def parse_screen(state: IngestState) -> IngestState:
     job = state["job"]
-    p = parse(resolve_file(job).read_bytes())
+    # PDF parsing is CPU-bound: run it in a thread so one big file doesn't stall the worker's other slots
+    p = await asyncio.to_thread(lambda: parse(resolve_file(job).read_bytes()))
     s = screen(p)
     info = {"status": p.status, "file_type": p.file_type, "pages": p.pages, "columns_detected": p.columns_detected,
             "reason": p.reason, "hidden_chars": len(p.hidden_text), "findings": s.findings}
@@ -78,7 +88,10 @@ async def parse_screen(state: IngestState) -> IngestState:
 async def do_extract(state: IngestState) -> IngestState:
     from ..promptlib import load
 
-    ref, sha = state["job"]["source_ref"], state["meta"]["sha256"]
+    ref = state["job"]["source_ref"]
+    # Cache key = hash of the exact text the model reads (after parsing + injection stripping), so a
+    # parser/screen change can never silently reuse an extraction made from different text.
+    sha = hashlib.sha256(state["clean_text"].encode()).hexdigest()
     model = load("ingest_extract_profile", PROMPT_VERSION)["model"]
     cached = await get_cached_extraction(sha, model, PROMPT_VERSION)
     if cached is not None:  # a retry: reuse the extraction we already paid for
@@ -127,6 +140,8 @@ async def store_unreadable(state: IngestState) -> IngestState:
 
 
 async def finish_duplicate(state: IngestState) -> IngestState:
+    if state.get("own_file"):
+        return {"outcome": state["outcome"]}
     return {"outcome": {"status": "duplicate", "resume_file_id": state["duplicate_of"],
                         "reason": "identical file already ingested"}}
 
