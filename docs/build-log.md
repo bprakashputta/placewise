@@ -3,6 +3,7 @@
 Real problems hit during the build only: symptom → cause → fix. Newest first.
 
 ## 2026-10-23 (Block 3)
+- **"Licensed architects in Dallas with healthcare project experience" found no one** (seen in the UI agent's test). *Cause:* the plan filtered on `RA` with no state, but licenses are stored with their state (`RA:TX`), so the exact match never hit. *Fix:* a license key with no state matches that license in any state. Now 13 candidates, 8 cited.
 - **Ask answered "Hey" with a list of random candidates** (found by the owner). *Cause:* the RAG graph was a straight line, so every message ran a full search. *Fix:* route each message first (keyword shortcut, then Haiku); greetings, help and off-topic get replies written by code (ADR 018). Routing eval 30/30.
 - **The first follow-up test gave a confusing answer** ("none of the eight people you named appear"). *Cause:* the follow-up searched all 15 candidates shown, not the 8 the answer discussed, and the rewritten question listed names, which the answer model then looked for. *Fix:* follow-ups search only the cited candidates, the rewrite says "the candidates from the previous answer", and no match → an explicit reply with a whole-pool search option.
 - **A chat question appeared to hang after the server restarted** (owner). *Cause:* the request died during an API restart and the page waited forever. *Fix:* a 90 s client timeout with a "please ask again" message.
