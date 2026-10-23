@@ -205,10 +205,13 @@ function Sidebar({
   }
 
   return (
+    <SidebarPeek collapsed={state === "collapsed" && collapsible === "icon"}>
+      {(peek, peekHandlers) => (
     <div
       className="group peer hidden text-sidebar-foreground md:block"
-      data-state={state}
-      data-collapsible={state === "collapsed" ? collapsible : ""}
+      data-state={peek ? "expanded" : state}
+      data-collapsible={state === "collapsed" && !peek ? collapsible : ""}
+      data-peek={peek ? "" : undefined}
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
@@ -222,7 +225,9 @@ function Sidebar({
           "group-data-[side=right]:rotate-180",
           variant === "floating" || variant === "inset"
             ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
+          // Peeking: the menu opens over the page, so the reserved space stays at the icon rail's width
+          peek && "w-(--sidebar-width-icon)"
         )}
       />
       <div
@@ -234,8 +239,10 @@ function Sidebar({
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
             : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+          peek && "z-40 shadow-2xl",
           className
         )}
+        {...peekHandlers}
         {...props}
       >
         <div
@@ -247,7 +254,49 @@ function Sidebar({
         </div>
       </div>
     </div>
+      )}
+    </SidebarPeek>
   )
+}
+
+// Hover (or keyboard focus) on the collapsed icon rail "peeks" the full menu over the page, without
+// moving the page; leaving tucks it back. Short delays stop it flashing when the pointer passes over.
+const SidebarPeekContext = React.createContext(false)
+
+type PeekHandlers = Pick<
+  React.HTMLAttributes<HTMLDivElement>,
+  "onMouseEnter" | "onMouseLeave" | "onFocus" | "onBlur"
+>
+
+function SidebarPeek({
+  collapsed,
+  children,
+}: {
+  collapsed: boolean
+  children: (peek: boolean, handlers: PeekHandlers) => React.ReactNode
+}) {
+  const [peek, setPeek] = React.useState(false)
+  // Handlers record the wanted state; the effect applies it after a short delay. A newer request
+  // replaces the pending one (the effect cleanup cancels its timer), which debounces quick passes.
+  const [want, setWant] = React.useState<{ open: boolean; ms: number } | null>(null)
+  React.useEffect(() => {
+    if (!want) return
+    const id = setTimeout(() => setPeek(want.open), want.ms)
+    return () => clearTimeout(id)
+  }, [want])
+  const later = (open: boolean, ms: number) => setWant({ open, ms })
+  const active = collapsed && peek
+  const handlers: PeekHandlers = collapsed
+    ? {
+        onMouseEnter: () => later(true, 120),
+        onMouseLeave: () => later(false, 180),
+        onFocus: () => later(true, 0),
+        onBlur: (e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) later(false, 0)
+        },
+      }
+    : {}
+  return <SidebarPeekContext.Provider value={active}>{children(active, handlers)}</SidebarPeekContext.Provider>
 }
 
 function SidebarTrigger({
@@ -502,6 +551,7 @@ function SidebarMenuButton({
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot.Root : "button"
   const { isMobile, state } = useSidebar()
+  const peeking = React.useContext(SidebarPeekContext)
 
   const button = (
     <Comp
@@ -530,7 +580,7 @@ function SidebarMenuButton({
       <TooltipContent
         side="right"
         align="center"
-        hidden={state !== "collapsed" || isMobile}
+        hidden={state !== "collapsed" || isMobile || peeking}
         {...tooltip}
       />
     </Tooltip>
