@@ -7,6 +7,7 @@ import { ResumeViewer, type ViewerTarget } from "@/components/resume-viewer";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSidebar } from "@/components/ui/sidebar";
 import { ApiError, apiFetch, useApi, type Citation, type Conversation, type ConversationSummary, type SendMessageResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { CandidatesPanel, type OpenResume } from "./candidates-panel";
@@ -43,6 +44,18 @@ const isWide = (px: number) => typeof window !== "undefined" && window.matchMedi
  * candidates on the right. Each column scrolls on its own; the page itself doesn't scroll.
  */
 export function AskView() {
+  // On Ask the chats list is the navigation, so fold the app menu to its icon rail for more room.
+  // It comes back as it was when you leave Ask, and can still be expanded at any time.
+  const { open: menuOpen, setOpen: setMenuOpen } = useSidebar();
+  const menuWasOpen = useRef(menuOpen);
+  useEffect(() => {
+    const restore = menuWasOpen.current;
+    setMenuOpen(false);
+    return () => {
+      if (restore) setMenuOpen(true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const router = useRouter();
   const params = useSearchParams();
   const urlId = parseConversationId(params.get("c"));
@@ -427,7 +440,7 @@ function ChatThread({
         </header>
 
         <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="@container mx-auto flex min-h-full w-full max-w-[720px] flex-col px-4 pt-6 pb-4 sm:px-6 sm:pt-8">
+          <div className="@container mx-auto flex min-h-full w-full max-w-[900px] flex-col px-4 pt-6 pb-4 sm:px-6 sm:pt-8">
             {body}
             <div ref={endRef} />
           </div>
