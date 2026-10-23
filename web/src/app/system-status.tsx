@@ -28,6 +28,8 @@ export function SystemStatus() {
   }, []);
 
   useEffect(() => {
+    // Fetch once on mount; load() sets the loading flag before the request, which is intended.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
