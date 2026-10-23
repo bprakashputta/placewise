@@ -5,11 +5,15 @@
 set -eu
 cd "$(dirname "$0")/.."
 DC="docker compose -f docker-compose.yml -f docker-compose.public.yml"
-$DC up -d --build
+if [ "${1:-}" = "--tunnel-only" ]; then
+  $DC up -d --force-recreate tunnel     # new tunnel (new random address); the app keeps running
+else
+  $DC up -d --build
+fi
 echo "Waiting for the tunnel address..."
 URL=""
 for _ in $(seq 1 60); do
-  URL=$($DC logs tunnel 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)
+  URL=$($DC logs --since 2m tunnel 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)
   [ -n "$URL" ] && break
   sleep 3
 done

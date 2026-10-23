@@ -31,7 +31,7 @@ services:
 
   tunnel:
     image: cloudflare/cloudflared:2025.8.1
-    command: ["tunnel", "--no-autoupdate", "--url", "http://web:3000"]
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://web:3000"]   # http2 copes better than QUIC with sleep/network changes
     depends_on:
       - web
     restart: unless-stopped
