@@ -35,3 +35,10 @@ services:
     depends_on:
       - web
     restart: unless-stopped
+
+  tunnel2:   # second, independent quick tunnel: the Worker fails over to it when the first one drops
+    image: cloudflare/cloudflared:2025.8.1
+    command: ["tunnel", "--no-autoupdate", "--protocol", "http2", "--url", "http://web:3000"]
+    depends_on:
+      - web
+    restart: unless-stopped

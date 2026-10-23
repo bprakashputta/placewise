@@ -1,26 +1,40 @@
 #!/usr/bin/env sh
-# Start (or refresh) the public demo link: Docker stack + quick tunnel, then point the workers.dev
-# address (https://placewise.bprakashputta.workers.dev) at the tunnel. Safe to re-run any time, e.g.
-# after a restart changed the tunnel's random address. Needs CLOUDFLARE_API_TOKEN in .env.
+# Start (or refresh) the public demo link: Docker stack + two quick tunnels, then point the workers.dev
+# address (https://placewise.bprakashputta.workers.dev) at both. The Worker fails over between them, so
+# one tunnel dropping never takes the link down. Safe to re-run any time. Needs CLOUDFLARE_API_TOKEN in .env.
+#   ./scripts/public-link.sh                    full stack + both tunnels
+#   ./scripts/public-link.sh --tunnel-only      recreate both tunnels (app keeps running)
+#   ./scripts/public-link.sh --replace tunnel2  recreate just one tunnel, keep the other serving
 set -eu
 cd "$(dirname "$0")/.."
 DC="docker compose -f docker-compose.yml -f docker-compose.public.yml"
-if [ "${1:-}" = "--tunnel-only" ]; then
-  $DC up -d --force-recreate tunnel     # new tunnel (new random address); the app keeps running
-else
-  $DC up -d --build
-fi
-echo "Waiting for the tunnel address..."
-URL=""
-for _ in $(seq 1 60); do
-  URL=$($DC logs --since 2m tunnel 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)
-  [ -n "$URL" ] && break
-  sleep 3
+mkdir -p logs
+STATE=logs/tunnel-origins   # "service url" per line, read by the watchdog
+
+case "${1:-}" in
+  --tunnel-only) $DC up -d --force-recreate tunnel tunnel2; FRESH="tunnel tunnel2" ;;
+  --replace)     $DC up -d --force-recreate "$2"; FRESH="$2" ;;
+  *)             $DC up -d --build; FRESH="tunnel tunnel2" ;;
+esac
+
+url_of() {  # latest trycloudflare address printed by one tunnel service
+  $DC logs "$1" 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true
+}
+echo "Waiting for the tunnel addresses..."
+for svc in $FRESH; do
+  for _ in $(seq 1 60); do
+    # only accept an address printed by the fresh container, not an old one from the log history
+    [ -n "$($DC logs --since 3m "$svc" 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1)" ] && break
+    sleep 3
+  done
 done
-[ -n "$URL" ] || { echo "No tunnel address found; check: $DC logs tunnel"; exit 1; }
-echo "Tunnel: $URL"
+U1=$(url_of tunnel); U2=$(url_of tunnel2)
+[ -n "$U1$U2" ] || { echo "No tunnel address found; check: $DC logs tunnel tunnel2"; exit 1; }
+printf 'tunnel %s\ntunnel2 %s\n' "$U1" "$U2" > "$STATE"
+ORIGINS=$(printf '%s,%s' "$U1" "$U2" | sed 's/^,//; s/,$//')
+echo "Tunnels: $ORIGINS"
 CLOUDFLARE_API_TOKEN=$(grep '^CLOUDFLARE_API_TOKEN=' .env | cut -d= -f2- | tr -d '"'"'"' \r\n')
 export CLOUDFLARE_API_TOKEN
 docker run --rm -e CLOUDFLARE_API_TOKEN -v "$PWD/infra/worker":/w -w /w node:22-alpine \
-  sh -c "npx -y wrangler@4.20.0 deploy --var TUNNEL_ORIGIN:$URL" | grep -E 'workers.dev|Uploaded|error' || true
+  sh -c "npx -y wrangler@4.20.0 deploy --var TUNNEL_ORIGINS:$ORIGINS" 2>&1 | grep -E 'workers.dev|Uploaded|rror' || true
 echo "Public link: https://placewise.bprakashputta.workers.dev"
