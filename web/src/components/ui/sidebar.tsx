@@ -268,16 +268,25 @@ const SidebarPeekContext = React.createContext(false)
 
 // Call the caller's own handlers too, so passing onMouseEnter/onFocus to <Sidebar> can't disable peek.
 function withPeek(props: React.HTMLAttributes<HTMLDivElement>, peek: PeekHandlers): PeekHandlers {
-  const out: PeekHandlers = {}
-  for (const key of Object.keys(peek) as (keyof PeekHandlers)[]) {
-    const mine = peek[key] as ((e: never) => void) | undefined
-    const theirs = props[key] as ((e: never) => void) | undefined
-    out[key] = ((e: never) => {
-      theirs?.(e)
-      mine?.(e)
-    }) as never
+  if (!peek.onMouseEnter) return {}   // not collapsed: the caller's handlers from {...props} apply as-is
+  return {
+    onMouseEnter: (e) => {
+      props.onMouseEnter?.(e)
+      peek.onMouseEnter?.(e)
+    },
+    onMouseLeave: (e) => {
+      props.onMouseLeave?.(e)
+      peek.onMouseLeave?.(e)
+    },
+    onFocus: (e) => {
+      props.onFocus?.(e)
+      peek.onFocus?.(e)
+    },
+    onBlur: (e) => {
+      props.onBlur?.(e)
+      peek.onBlur?.(e)
+    },
   }
-  return out
 }
 
 type PeekHandlers = Pick<
@@ -367,6 +376,8 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
+        // while peeking the menu is really collapsed, so clicking the rail expands it: same cursor as collapsed
+        "[[data-side=left][data-peek]_&]:cursor-e-resize [[data-side=right][data-peek]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
         "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
         "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
@@ -382,7 +393,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2 md:peer-data-[variant=inset]:peer-data-peek:ml-2",
         className
       )}
       {...props}
