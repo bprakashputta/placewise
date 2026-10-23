@@ -16,6 +16,7 @@ import traceback
 
 from .db import close_pool, open_pool, pool
 from .ingest import queue
+from .ingest.spend import SpendCapReached
 from .migrate import migrate
 
 CONCURRENCY = int(os.environ.get("WORKER_CONCURRENCY", "4"))
@@ -48,6 +49,10 @@ async def slot(n: int) -> None:
                 await queue.finish(conn, job["id"], status, result, file_id)
             print(f"[{WORKER_ID}#{n}] job {job['id']} {job['source_ref']} → {status} "
                   f"({time.perf_counter() - t0:.1f}s)", flush=True)
+        except SpendCapReached as e:  # not a failure: pause and re-check later
+            async with pool().connection() as conn:
+                await queue.defer(conn, job, 30, str(e))
+            print(f"[{WORKER_ID}#{n}] job {job['id']} paused: {e}", flush=True)
         except Exception as e:  # unexpected error: retry with backoff, keep the traceback
             err = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=5)}"
             async with pool().connection() as conn:

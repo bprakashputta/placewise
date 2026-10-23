@@ -68,3 +68,12 @@ async def reclaim_stale(conn: AsyncConnection) -> int:
 async def summary(conn: AsyncConnection) -> dict:
     cur = await conn.execute("SELECT status, count(*) FROM ingest_jobs GROUP BY status")
     return {status: n for status, n in await cur.fetchall()}
+
+
+async def defer(conn: AsyncConnection, job: dict, minutes: int, reason: str) -> None:
+    """Pause a job without using up an attempt (e.g. the daily spend cap is reached)."""
+    await conn.execute(
+        """UPDATE ingest_jobs SET status = 'queued', attempts = GREATEST(attempts - 1, 0),
+                  not_before = now() + make_interval(mins => %s), error = %s,
+                  locked_by = NULL, locked_at = NULL, updated_at = now() WHERE id = %s""",
+        (minutes, reason, job["id"]))

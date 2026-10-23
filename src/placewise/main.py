@@ -14,6 +14,7 @@ from langsmith import traceable
 from . import __version__
 from .config import get_settings
 from .db import close_pool, open_pool
+from .candidates_api import router as candidates_router
 from .health import check_db, check_langsmith
 from .ingest_api import dev_router as ingest_dev_router
 from .ingest_api import router as ingest_router
@@ -68,6 +69,7 @@ async def health(response: Response) -> dict:
 
 app.include_router(api)
 app.include_router(ingest_router)
+app.include_router(candidates_router)
 
 if DEV:
     @traceable(name="placewise.trace_check", run_type="chain")
