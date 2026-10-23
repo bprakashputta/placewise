@@ -8,3 +8,6 @@ evals/results/
 # Seed data: rendered files are rebuilt from data/seed/generated, so not committed
 data/seed/resumes/
 data/seed/public/
+
+# Agent worktrees (isolated parallel work)
+.claude/worktrees/
