@@ -1,43 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowUp, Briefcase, CircleAlert, FileText, Loader2, MessagesSquare, Plus, SearchX, Sparkles } from "lucide-react";
-import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/page-header";
+import { CircleAlert, Lock, MessagesSquare, PanelLeftOpen, PanelRightOpen, Plus, SearchX, SquarePen, Users } from "lucide-react";
 import { ResumeViewer, type ViewerTarget } from "@/components/resume-viewer";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  ApiError,
-  SEARCH_KINDS,
-  apiFetch,
-  useApi,
-  type Citation,
-  type Conversation,
-  type ConversationSummary,
-  type Message,
-  type SendMessageResponse,
-} from "@/lib/api";
+import { ApiError, apiFetch, useApi, type Citation, type Conversation, type ConversationSummary, type SendMessageResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Answer, Markdown, PendingReply, sectionLabel } from "./answer";
-import { ConversationsPanel } from "./conversations-panel";
+import { CandidatesPanel, type OpenResume } from "./candidates-panel";
+import { ChatsList } from "./chats-list";
+import { Composer, MAX_CHARS } from "./composer";
+import { BRAND_SOLID, ENTER, searchResponse, sectionLabel, withKey, type UIMessage } from "./lib";
+import { AssistantMessage, JobOrderChip, PendingReply, UserMessage } from "./messages";
+import { Welcome } from "./welcome";
 
-const EXAMPLES = [
-  "Who holds a Texas PE with drainage experience in DFW?",
-  "Which licensed architects have healthcare projects over $50M?",
-  "Find MEP engineers in Houston who know Revit and are LEED AP.",
-];
-
-const MAX_CHARS = 2000;
 const TIMEOUT_MS = 90_000;
-
-/** A message as shown: server messages plus the optimistic user bubble, which may have failed. */
-type UIMessage = Message & { localKey: string; failed?: string };
 
 function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
@@ -51,20 +30,25 @@ function errorMessage(e: unknown): string {
   return "Can't reach the server. Check your connection and try again.";
 }
 
-const withKey = (m: Message): UIMessage => ({ ...m, localKey: `m${m.id}` });
-
 /** `?c=` → conversation id; null = new chat; 0 = present but not a valid id. */
 function parseConversationId(raw: string | null): number | null {
   if (raw === null || raw === "") return null;
   return /^\d+$/.test(raw) && Number(raw) > 0 ? Number(raw) : 0;
 }
 
+const isWide = (px: number) => typeof window !== "undefined" && window.matchMedia(`(min-width: ${px}px)`).matches;
+
+/**
+ * The Ask workspace: chats on the left, the conversation in the middle, the selected answer's
+ * candidates on the right. Each column scrolls on its own; the page itself doesn't scroll.
+ */
 export function AskView() {
   const router = useRouter();
   const params = useSearchParams();
   const urlId = parseConversationId(params.get("c"));
   const list = useApi<ConversationSummary[]>("/api/conversations");
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [chatsSheet, setChatsSheet] = useState(false);
+  const [chatsDocked, setChatsDocked] = useState(true);
 
   // The thread on screen. Navigating to another ?c= (or to a new chat) remounts it through `key`;
   // a new chat that just got its id keeps the same key, so its optimistic messages stay put.
@@ -78,7 +62,7 @@ export function AskView() {
   }
 
   function newChat() {
-    setSheetOpen(false);
+    setChatsSheet(false);
     if (urlId === null) setThread((t) => ({ key: t.key + 1, id: null, created: null }));
     else router.push("/ask");
   }
@@ -88,43 +72,40 @@ export function AskView() {
     router.replace(`/ask?c=${id}`, { scroll: false });
   }
 
-  const panel = (onSelect?: () => void) => (
-    <ConversationsPanel
+  const chats = (opts: { onSelect?: () => void; onCollapse?: () => void }) => (
+    <ChatsList
       conversations={list.data}
       error={list.error}
       loading={list.loading}
       selectedId={urlId}
       onNewChat={newChat}
-      onSelect={onSelect}
       onRetry={list.reload}
-      className="h-full"
+      {...opts}
     />
   );
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Ask"
-        description="Chat about your candidate pool. Answers cite the resumes."
-        actions={
-          <Button variant="outline" className="lg:hidden" onClick={() => setSheetOpen(true)}>
-            <MessagesSquare aria-hidden="true" /> Chats
-          </Button>
-        }
+    <div data-ask-workspace className="relative flex h-[calc(100svh-3.5rem)] w-full min-w-0 overflow-hidden">
+      {chatsDocked && (
+        <aside className="hidden w-[248px] shrink-0 border-r bg-muted/30 lg:block dark:bg-muted/10">{chats({ onCollapse: () => setChatsDocked(false) })}</aside>
+      )}
+      <ChatThread
+        key={thread.key}
+        id={thread.id}
+        onCreated={onCreated}
+        onChanged={list.reload}
+        onNewChat={newChat}
+        chatsDocked={chatsDocked}
+        onShowChats={() => (isWide(1024) ? setChatsDocked(true) : setChatsSheet(true))}
+        listTitle={list.data?.find((c) => c.id === urlId)?.title}
       />
-      <div className="flex items-start gap-6">
-        <aside className="sticky top-20 hidden max-h-[calc(100svh-7rem)] w-[260px] shrink-0 lg:flex lg:flex-col">{panel()}</aside>
-        <div className="min-w-0 flex-1">
-          <ChatThread key={thread.key} id={thread.id} onCreated={onCreated} onChanged={list.reload} onNewChat={newChat} />
-        </div>
-      </div>
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="left" className="w-[300px] gap-0 p-4 pt-12">
+      <Sheet open={chatsSheet} onOpenChange={setChatsSheet}>
+        <SheetContent side="left" className="w-[300px] gap-0 p-0 pt-10">
           <SheetHeader className="sr-only">
             <SheetTitle>Chats</SheetTitle>
             <SheetDescription>Your saved Ask conversations.</SheetDescription>
           </SheetHeader>
-          {panel(() => setSheetOpen(false))}
+          {chats({ onSelect: () => setChatsSheet(false) })}
         </SheetContent>
       </Sheet>
     </div>
@@ -136,11 +117,18 @@ function ChatThread({
   onCreated,
   onChanged,
   onNewChat,
+  chatsDocked,
+  onShowChats,
+  listTitle,
 }: {
   id: number | null;
   onCreated: (id: number) => void;
   onChanged: () => void;
   onNewChat: () => void;
+  chatsDocked: boolean;
+  onShowChats: () => void;
+  /** The chat's title from the (reloaded) list: the API retitles a chat after a message. */
+  listTitle?: string;
 }) {
   // Loaded once per mount; the parent remounts this component for a different conversation.
   const [initialId] = useState(id);
@@ -154,10 +142,14 @@ function ChatThread({
   const [pending, setPending] = useState(false);
   const [text, setText] = useState("");
   const [viewer, setViewer] = useState<ViewerTarget | null>(null);
+  // Which answer's candidates the right panel shows; null = the latest one.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false); // lg–xl overlay
+  const [sheetOpen, setSheetOpen] = useState(false); // below lg
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
-  const scrollTarget = useRef<"bottom" | string | null>(null);
+  const scrollTarget = useRef<{ to: "bottom" | string; smooth: boolean } | null>(null);
   const seq = useRef(0);
 
   useEffect(() => {
@@ -176,7 +168,7 @@ function ChatThread({
         const { messages: msgs, ...summary } = c;
         setMeta(summary);
         setMessages(msgs.map(withKey));
-        scrollTarget.current = "bottom";
+        scrollTarget.current = { to: "bottom", smooth: false };
         setLoad({ status: "ready" });
       })
       .catch((e: unknown) => {
@@ -189,15 +181,25 @@ function ChatThread({
     };
   }, [initialId, attempt]);
 
-  // Scroll after render: to the bottom when a chat opens, or to the start of the newest question
-  // when one is sent or answered (so long answers read from the top).
+  // Scroll after render: to the bottom when a chat opens, or smoothly to the start of the newest
+  // question when one is sent or answered (so long answers read from the top).
   useEffect(() => {
     const target = scrollTarget.current;
     if (!target) return;
     scrollTarget.current = null;
-    if (target === "bottom") endRef.current?.scrollIntoView({ block: "end" });
-    else document.querySelector(`[data-msg="${target}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const behavior: ScrollBehavior = target.smooth && !reduce ? "smooth" : "auto";
+    if (target.to === "bottom") endRef.current?.scrollIntoView({ block: "end", behavior });
+    else document.querySelector(`[data-msg="${target.to}"]`)?.scrollIntoView({ behavior, block: "start" });
   }, [messages, pending]);
+
+  // Esc closes the lg–xl candidates drawer.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen]);
 
   async function send(raw: string) {
     const content = raw.trim();
@@ -217,7 +219,7 @@ function ChatThread({
     setMessages((m) => [...m.filter((x) => !x.failed), optimistic]);
     setPending(true);
     setText("");
-    scrollTarget.current = localKey;
+    scrollTarget.current = { to: localKey, smooth: true };
     const signal = AbortSignal.timeout(TIMEOUT_MS); // never leave the chat stuck "pending" if a request dies
     try {
       let cid = conversationId;
@@ -245,12 +247,11 @@ function ChatThread({
         signal,
       });
       if (!alive.current) return;
-      setMessages((m) => [
-        ...m.map((x) => (x.localKey === localKey ? { ...res.user_message, localKey } : x)),
-        withKey(res.assistant_message),
-      ]);
+      setMessages((m) => [...m.map((x) => (x.localKey === localKey ? { ...res.user_message, localKey } : x)), withKey(res.assistant_message)]);
       setMeta((m) => m && { ...m, active: true });
-      scrollTarget.current = localKey;
+      // A new answer with candidates takes over the panel.
+      if ((res.assistant_message.response?.candidates?.length ?? 0) > 0) setSelectedKey(null);
+      scrollTarget.current = { to: localKey, smooth: true };
       onChanged();
     } catch (e) {
       if (!alive.current) return;
@@ -262,38 +263,55 @@ function ChatThread({
     inputRef.current?.focus();
   }
 
-  const onCite = (c: Citation) =>
+  const openResume: OpenResume = ({ name, resumeFileId, subtitle }) =>
     setViewer({
-      title: c.candidate_name,
-      subtitle: `${sectionLabel(c.section)}: “${c.quote}”`,
-      viewUrl: `/api/candidates/files/${c.resume_file_id}/view`,
-      downloadUrl: `/api/candidates/files/${c.resume_file_id}`,
+      title: name,
+      subtitle,
+      viewUrl: `/api/candidates/files/${resumeFileId}/view`,
+      downloadUrl: `/api/candidates/files/${resumeFileId}`,
     });
+  const onCite = (c: Citation) =>
+    openResume({ name: c.candidate_name, resumeFileId: c.resume_file_id, subtitle: `${sectionLabel(c.section)}: “${c.quote}”` });
 
-  if (load.status === "missing") {
-    return (
-      <Card className="py-0">
-        <EmptyState
-          icon={SearchX}
-          title="This chat doesn't exist or isn't yours"
-          description="It may have been removed, or it belongs to another user."
-          action={
-            <Button onClick={onNewChat}>
+  // Answers with candidates; the panel shows the chosen one, else the latest.
+  const withCandidates = messages.filter((m) => (searchResponse(m)?.candidates?.length ?? 0) > 0);
+  const selected = withCandidates.find((m) => m.localKey === selectedKey) ?? withCandidates[withCandidates.length - 1] ?? null;
+  const panelResponse = selected ? searchResponse(selected) : null;
+  const panelCount = panelResponse?.candidates.length ?? 0;
+
+  function showInPanel(key: string) {
+    setSelectedKey(key);
+    if (isWide(1280)) return;
+    if (isWide(1024)) setDrawerOpen(true);
+    else setSheetOpen(true);
+  }
+
+  const last = messages[messages.length - 1];
+  const suggestions = !pending && last?.role === "assistant" ? (last.suggestions ?? []).slice(0, 3) : [];
+  const known = listTitle || meta?.title;
+  const title = known && known !== "New chat" ? known : messages.length > 0 ? "New chat" : "Ask";
+  const panel = (onClose?: () => void) => (
+    <CandidatesPanel key={selected?.localKey ?? "none"} response={panelResponse} onOpenResume={openResume} onClose={onClose} />
+  );
+
+  let body: React.ReactNode;
+  if (load.status === "missing" || load.status === "error") {
+    const missing = load.status === "missing";
+    body = (
+      <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
+        <span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+          {missing ? <SearchX className="size-5" aria-hidden="true" /> : <CircleAlert className="size-5" aria-hidden="true" />}
+        </span>
+        <h2 className="mt-4 text-base font-semibold">{missing ? "This chat doesn't exist or isn't yours" : "Couldn't load this chat"}</h2>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          {missing ? "It may have been removed, or it belongs to another user." : (load.error?.message ?? "Something went wrong.")}
+        </p>
+        <div className="mt-5">
+          {missing ? (
+            <Button onClick={onNewChat} className={BRAND_SOLID}>
               <Plus aria-hidden="true" /> New chat
             </Button>
-          }
-        />
-      </Card>
-    );
-  }
-  if (load.status === "error") {
-    return (
-      <Card className="py-0">
-        <EmptyState
-          icon={CircleAlert}
-          title="Couldn't load this chat"
-          description={load.error?.message ?? "Something went wrong."}
-          action={
+          ) : (
             <Button
               variant="outline"
               onClick={() => {
@@ -303,216 +321,169 @@ function ChatThread({
             >
               Try again
             </Button>
-          }
-        />
-      </Card>
+          )}
+        </div>
+      </div>
+    );
+  } else if (load.status === "loading") {
+    body = (
+      <div className="space-y-8 py-2" aria-busy="true" aria-label="Loading chat">
+        <Skeleton className="ml-auto h-10 w-2/5 rounded-2xl" />
+        <div className="flex gap-3">
+          <Skeleton className="size-7 rounded-lg" />
+          <div className="flex-1 space-y-2.5">
+            <Skeleton className="h-4 w-11/12" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-3/5" />
+            <Skeleton className="mt-4 h-12 w-full rounded-xl" />
+          </div>
+        </div>
+        <Skeleton className="ml-auto h-10 w-1/3 rounded-2xl" />
+        <div className="flex gap-3">
+          <Skeleton className="size-7 rounded-lg" />
+          <div className="flex-1 space-y-2.5">
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        </div>
+      </div>
+    );
+  } else if (messages.length === 0 && !pending) {
+    body = <Welcome onPick={send} disabled={pending} />;
+  } else {
+    body = (
+      <ol className="space-y-8" aria-label="Conversation">
+        {messages.map((m) => (
+          <li key={m.localKey} data-msg={m.localKey} className={cn("scroll-mt-6", ENTER)}>
+            {m.role === "user" ? (
+              <UserMessage m={m} pending={pending} onRetry={() => send(m.content)} />
+            ) : (
+              <AssistantMessage m={m} inPanel={selected?.localKey === m.localKey} onShowInPanel={() => showInPanel(m.localKey)} onCite={onCite} />
+            )}
+          </li>
+        ))}
+        {pending && (
+          <li className={ENTER}>
+            <PendingReply />
+          </li>
+        )}
+      </ol>
     );
   }
 
-  const last = messages[messages.length - 1];
-  const showSuggestionsFor = !pending && last?.role === "assistant" ? last.localKey : null;
-
   return (
-    <div className="space-y-3">
-      <Card className="flex min-h-[32rem] flex-col gap-0 py-0">
-        {meta?.job_order_id && (
-          <div className="flex items-center gap-2 border-b px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
-            <Briefcase className="size-3.5 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 truncate">
-              About{" "}
-              <Link href={`/job-orders/${meta.job_order_id}`} className="font-medium text-foreground hover:underline">
-                {meta.job_order_title ?? `job order ${meta.job_order_id}`}
-              </Link>
-            </span>
-          </div>
-        )}
-        <CardContent className="flex flex-1 flex-col px-0">
-          {load.status === "loading" ? (
-            <div className="space-y-6 px-4 py-5 sm:px-6" aria-busy="true" aria-label="Loading chat">
-              <Skeleton className="ml-auto h-9 w-2/5 rounded-2xl" />
-              <Skeleton className="h-24 w-4/5" />
-              <Skeleton className="ml-auto h-9 w-1/3 rounded-2xl" />
-              <Skeleton className="h-16 w-3/5" />
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-              <div className="mb-4 flex size-11 items-center justify-center rounded-xl bg-brand-soft text-brand">
-                <Sparkles className="size-5" aria-hidden="true" />
-              </div>
-              <h2 className="text-sm font-semibold">Ask anything about your candidates</h2>
-              <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                Every answer links back to the resume lines it came from, and quotes are checked against the resumes. Ask follow-ups
-                like &ldquo;which of those have a PMP?&rdquo;
-              </p>
-              <ul className="mt-6 flex max-w-2xl flex-wrap justify-center gap-2" aria-label="Example questions">
-                {EXAMPLES.map((q) => (
-                  <li key={q}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => send(q)}
-                      disabled={pending}
-                      className="h-auto rounded-full px-3 py-1.5 text-left whitespace-normal"
-                    >
-                      {q}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <ol className="flex-1 space-y-6 px-4 py-5 sm:px-6" aria-label="Conversation">
-              {messages.map((m) => (
-                <li key={m.localKey} data-msg={m.localKey} className="scroll-mt-20">
-                  {m.role === "user" ? (
-                    <UserMessage m={m} pending={pending} onRetry={() => send(m.content)} />
-                  ) : (
-                    <AssistantMessage
-                      m={m}
-                      showSuggestions={m.localKey === showSuggestionsFor}
-                      onSuggestion={send}
-                      onCite={onCite}
-                    />
-                  )}
-                </li>
-              ))}
-              {pending && (
-                <li>
-                  <AssistantShell>
-                    <PendingReply />
-                  </AssistantShell>
-                </li>
-              )}
-            </ol>
-          )}
-          <div ref={endRef} />
-        </CardContent>
-        {meta && !meta.active && !pending && (
-          <p className="border-t px-4 py-2 text-xs text-muted-foreground sm:px-6">This chat is closed. Sending a message reopens it.</p>
-        )}
-        <form
-          className="sticky bottom-0 flex items-end gap-2 rounded-b-xl border-t bg-card p-3"
-          aria-label="Send a message"
-          onSubmit={(e) => {
-            e.preventDefault();
-            send(text);
-          }}
-        >
-          <label htmlFor="ask-input" className="sr-only">
-            Your message
-          </label>
-          <textarea
-            id="ask-input"
-            ref={inputRef}
-            value={text}
-            rows={1}
-            maxLength={MAX_CHARS}
-            disabled={load.status === "loading"}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                send(text);
-              }
-            }}
-            placeholder={pending ? "Working on it…" : "Ask about your candidate pool…"}
-            className="field-sizing-content max-h-40 min-h-9 flex-1 resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
-          />
-          <Button type="submit" size="icon-lg" disabled={pending || !text.trim()} aria-label="Send message">
-            {pending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}
+    <>
+      <section className="flex min-w-0 flex-1 flex-col bg-background" aria-label="Conversation">
+        <header className="flex h-12 shrink-0 items-center gap-1.5 border-b px-2 sm:px-3">
+          <Button variant="ghost" size="icon-sm" className="text-muted-foreground lg:hidden" onClick={onShowChats} aria-label="Show chats">
+            <MessagesSquare aria-hidden="true" />
           </Button>
-        </form>
-      </Card>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <FileText className="size-3.5 shrink-0" aria-hidden="true" /> Chats are saved for you. Searches cost a few cents of AI usage; greetings are
-        free.
-      </p>
-      <ResumeViewer target={viewer} onClose={() => setViewer(null)} />
-    </div>
-  );
-}
-
-function UserMessage({ m, pending, onRetry }: { m: UIMessage; pending: boolean; onRetry: () => void }) {
-  return (
-    <div className="flex flex-col items-end gap-2">
-      <p
-        className={cn(
-          "max-w-[85%] rounded-2xl bg-muted px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
-          m.failed && "border border-destructive/40",
-        )}
-      >
-        {m.content}
-      </p>
-      {m.failed && (
-        <div role="alert" className="flex max-w-[85%] gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <div className="space-y-2">
-            <p>Not sent. {m.failed}</p>
-            <Button variant="outline" size="xs" onClick={onRetry} disabled={pending}>
-              Try again
+          {!chatsDocked && (
+            <Button variant="ghost" size="icon-sm" className="hidden text-muted-foreground lg:inline-flex" onClick={onShowChats} aria-label="Show chats" title="Show chats">
+              <PanelLeftOpen aria-hidden="true" />
             </Button>
+          )}
+          <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
+            {load.status === "loading" ? (
+              <Skeleton className="h-4 w-48" />
+            ) : (
+              <h1 className="truncate text-sm font-semibold" title={title}>
+                {title}
+              </h1>
+            )}
+            {meta?.job_order_id && <JobOrderChip id={meta.job_order_id} title={meta.job_order_title && meta.job_order_title !== meta.title ? meta.job_order_title : null} />}
+            {meta && !meta.active && (
+              <span className="hidden shrink-0 items-center gap-1 text-[11px] text-muted-foreground sm:inline-flex">
+                <Lock className="size-3" aria-hidden="true" /> Closed
+              </span>
+            )}
+          </div>
+          {panelCount > 0 && (
+            <>
+              <Button variant="outline" size="sm" className="gap-1.5 lg:hidden" onClick={() => setSheetOpen(true)} aria-label={`Candidates (${panelCount})`}>
+                <Users aria-hidden="true" /> <span className="hidden sm:inline">Candidates</span>
+                <span className="text-muted-foreground tabular-nums">
+                  <span className="hidden sm:inline">(</span>
+                  {panelCount}
+                  <span className="hidden sm:inline">)</span>
+                </span>
+              </Button>
+              <Button
+                variant={drawerOpen ? "secondary" : "outline"}
+                size="sm"
+                className="hidden gap-1.5 lg:inline-flex xl:hidden"
+                onClick={() => setDrawerOpen((o) => !o)}
+                aria-expanded={drawerOpen}
+              >
+                <PanelRightOpen aria-hidden="true" /> Candidates <span className="text-muted-foreground tabular-nums">({panelCount})</span>
+              </Button>
+            </>
+          )}
+          {messages.length > 0 && (
+            <Button variant="ghost" size="icon-sm" className="text-muted-foreground" onClick={onNewChat} aria-label="New chat" title="New chat">
+              <SquarePen aria-hidden="true" />
+            </Button>
+          )}
+        </header>
+
+        <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <div className="@container mx-auto flex min-h-full w-full max-w-[720px] flex-col px-4 pt-6 pb-4 sm:px-6 sm:pt-8">
+            {body}
+            <div ref={endRef} />
           </div>
         </div>
+
+        {load.status !== "missing" && load.status !== "error" && (
+          <Composer
+            value={text}
+            onChange={setText}
+            onSend={send}
+            pending={pending}
+            disabled={load.status === "loading"}
+            inputRef={inputRef}
+            suggestions={suggestions}
+            notice={
+              meta && !meta.active && !pending ? (
+                <p className="mb-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                  <Lock className="size-3" aria-hidden="true" /> This chat is closed. Sending a message reopens it.
+                </p>
+              ) : null
+            }
+          />
+        )}
+      </section>
+
+      {/* ≥ xl: docked candidates column. */}
+      <aside className="hidden w-[380px] shrink-0 border-l bg-muted/30 xl:block dark:bg-muted/10" aria-label="Candidates">
+        {panel()}
+      </aside>
+
+      {/* lg–xl: the same panel as an overlay drawer. */}
+      {drawerOpen && (
+        <>
+          <div className="absolute inset-0 z-20 hidden bg-black/20 motion-safe:animate-in motion-safe:fade-in-0 lg:block xl:hidden" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+          <aside
+            className="absolute inset-y-0 right-0 z-30 hidden w-[380px] max-w-[90%] border-l bg-background shadow-2xl motion-safe:animate-in motion-safe:slide-in-from-right-8 motion-safe:duration-200 lg:block xl:hidden"
+            aria-label="Candidates"
+          >
+            {panel(() => setDrawerOpen(false))}
+          </aside>
+        </>
       )}
-    </div>
-  );
-}
 
-function AssistantShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-soft text-brand">
-        <Sparkles className="size-3.5" aria-hidden="true" />
-      </span>
-      <div className="min-w-0 flex-1 pt-1">{children}</div>
-    </div>
-  );
-}
+      {/* Below lg: a bottom sheet. */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent side="bottom" showCloseButton={false} className="gap-0 rounded-t-2xl p-0 data-[side=bottom]:h-[85svh]">
+          <SheetHeader className="sr-only">
+            <SheetTitle>Candidates</SheetTitle>
+            <SheetDescription>Candidates from the selected answer.</SheetDescription>
+          </SheetHeader>
+          <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/25" aria-hidden="true" />
+          <div className="min-h-0 flex-1">{panel(() => setSheetOpen(false))}</div>
+        </SheetContent>
+      </Sheet>
 
-function AssistantMessage({
-  m,
-  showSuggestions,
-  onSuggestion,
-  onCite,
-}: {
-  m: UIMessage;
-  showSuggestions: boolean;
-  onSuggestion: (text: string) => void;
-  onCite: (c: Citation) => void;
-}) {
-  const r = SEARCH_KINDS.has(m.kind) ? m.response : null;
-  const searched = m.kind === "follow_up" ? r?.standalone_question : null;
-  return (
-    <AssistantShell>
-      <div className="space-y-3">
-        {(m.kind === "job_order" || searched) && (
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {m.kind === "job_order" && (
-              <Badge variant="outline" className="gap-1 font-normal">
-                <Briefcase className="size-3" aria-hidden="true" /> Job order
-              </Badge>
-            )}
-            {searched && <span className="italic">Searched: {searched}</span>}
-          </div>
-        )}
-        {r ? <Answer text={m.content} r={r} onCite={onCite} /> : <Markdown>{m.content}</Markdown>}
-        {showSuggestions && m.suggestions?.length > 0 && (
-          <ul className="flex flex-wrap gap-2 pt-1" aria-label="Suggested follow-ups">
-            {m.suggestions.slice(0, 3).map((s) => (
-              <li key={s}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onSuggestion(s)}
-                  className="h-auto rounded-full px-3 py-1.5 text-left whitespace-normal"
-                >
-                  {s}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </AssistantShell>
+      <ResumeViewer target={viewer} onClose={() => setViewer(null)} />
+    </>
   );
 }
