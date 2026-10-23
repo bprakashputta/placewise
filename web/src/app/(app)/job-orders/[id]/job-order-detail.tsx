@@ -2,7 +2,21 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronDown, CircleAlert, Info, Loader2, MessageCircleQuestion, Search, SearchX, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  Info,
+  Loader2,
+  MessageCircleQuestion,
+  MessagesSquare,
+  Search,
+  SearchX,
+  Sparkles,
+} from "lucide-react";
 import { ApiErrorState } from "@/components/api-state";
 import { EmptyState } from "@/components/empty-state";
 import { ResumeViewer, type ViewerTarget } from "@/components/resume-viewer";
@@ -180,6 +194,8 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
   const matches = useApi<MatchesResponse>(valid ? `/api/job-orders/${id}/matches` : null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const router = useRouter();
   const [viewer, setViewer] = useState<ViewerTarget | null>(null);
   const { user } = useUser();
   const isAdmin = user?.role === "admin";
@@ -212,6 +228,22 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
       );
     }
     setStarting(false);
+  }
+
+  // Opens a chat tied to this job order; the API seeds it with an assistant intro message.
+  async function askAboutRole() {
+    setOpening(true);
+    try {
+      const conv = await apiFetch<{ id: number }>("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_order_id: Number(id) }),
+      });
+      router.push(`/ask?c=${conv.id}`);
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Couldn't open a chat. Try again.");
+      setOpening(false);
+    }
   }
 
   const back = (
@@ -256,10 +288,16 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
             {j.client ? capitalize(j.client) : "Client not stated"} · created {relativeTime(j.created_at)}
           </p>
         </div>
-        <Button onClick={findCandidates} disabled={busy || (matches.data === undefined && !noRun)} className="shrink-0">
-          {busy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
-          {running ? "Matching…" : run ? "Run matching again" : "Find candidates"}
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={askAboutRole} disabled={opening}>
+            {opening ? <Loader2 className="animate-spin" aria-hidden="true" /> : <MessagesSquare aria-hidden="true" />}
+            Ask about this role
+          </Button>
+          <Button onClick={findCandidates} disabled={busy || (matches.data === undefined && !noRun)}>
+            {busy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
+            {running ? "Matching…" : run ? "Run matching again" : "Find candidates"}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-5">
