@@ -51,6 +51,8 @@ docker compose -f docker-compose.yml -f docker-compose.public.yml logs tunnel | 
 - The daily AI spend cap is `PUBLIC_DAILY_LLM_SPEND_CAP_USD` (default $30).
 - The address is random and changes when the tunnel restarts; the Mac must stay on and awake.
 - Back to local development: `docker compose up -d --build` (dev server with hot reload).
+- **Stable address:** a Cloudflare Worker (`infra/worker/`) at **https://placewise.bprakashputta.workers.dev** forwards to the tunnel, so the link stays the same when the tunnel's random address changes. `scripts/public-link.sh` starts the stack and re-points the Worker (needs `CLOUDFLARE_API_TOKEN` in `.env`, a token scoped to editing Workers).
+- **Logs and observability:** Workers Logs are on (every request kept). In the Cloudflare dashboard: Workers & Pages → placewise → **Logs** (one JSON line per request: method, path, status, ms, country; never cookies, query values or bodies) and **Metrics**. App-side traces are in LangSmith; container logs via `docker compose logs api web worker tunnel`.
 
 ## Synthetic data (seed CLI)
 Runs in the on-demand `seed` tools container. `write`, `samples` and `job-orders` call Claude Haiku 5.5 and need `PLACEWISE_ANTHROPIC_TEST_API_KEY` (a full run costs under $1).

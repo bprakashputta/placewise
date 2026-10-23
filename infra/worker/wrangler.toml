@@ -1,0 +1,12 @@
+# Placewise public address: https://placewise.<your-subdomain>.workers.dev
+# Deploy (in Docker, never on the host):  see README "Public demo link".
+name = "placewise"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+# Workers Logs: every request (and the log line below) is searchable in the Cloudflare dashboard
+# under Workers & Pages → placewise → Logs / Observability.
+[observability]
+enabled = true
+head_sampling_rate = 1   # keep every request (the demo's traffic is tiny)
