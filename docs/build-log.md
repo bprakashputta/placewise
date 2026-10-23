@@ -2,6 +2,9 @@
 
 Real problems hit during the build only: symptom → cause → fix. Newest first.
 
+## 2026-10-23 (Block 3)
+- **Auth tamper test passed for the wrong reason (twice).** First, flipping the signature's last base64 character can leave its decoded bytes unchanged (unused padding bits). Then the test client still held the original cookie and sent it alongside the forged one. *Fix:* tamper with the payload (claim uid 1/admin), and clear the cookie jar before setting the forged cookie. A live curl check with a fake cookie had already returned 401; the code was right, the test wasn't.
+
 ## 2026-10-22 (Block 2)
 - **Full ingest: 597 resumes, 3 workers, ~$12.12 (Sonnet extraction, $0.020/resume; Voyage embeddings within the free tier).** End-to-end eval (stored data vs answer key): routing 597/597 (581 processed, 8 exact duplicates, 8 needs-attention), licenses+state 99.7%, years MAE 0.04, metro/discipline 100%, unusable and adversarial 100%/100%, flawed 88% precision / 92% recall, 4,713 chunks all embedded.
 - **Over-merging people: 436 app people vs 563 true.** *Cause:* matching on "same email OR same phone"; the synthetic 555-01xx numbers collide (and real resumes share office lines). *Fix:* same email, or same phone AND same name. Re-ingested from scratch: 563 = 563, and 26/26 multi-file people linked. The cost was $0.11, not $0: the 5 resumes from the first test batch predated the extraction cache. Everything else hit the cache.

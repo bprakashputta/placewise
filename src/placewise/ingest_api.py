@@ -1,8 +1,9 @@
 """Ingest API: queue status and retry for everyone (auth in Block 3); bulk seed import and reset in dev only.
 File upload lives in candidates_api.py."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from psycopg.rows import dict_row
 
+from .auth import require_admin
 from .db import pool
 from .ingest import queue
 from .ingest.sources import SEED_RESUMES
@@ -54,7 +55,7 @@ async def enqueue_seed(limit: int = 0, folders: str = "") -> dict:
     return {"requested": len(wanted), "queued": added, "already_queued": len(wanted) - added}
 
 
-@router.post("/jobs/retry-failed")
+@router.post("/jobs/retry-failed", dependencies=[Depends(require_admin)])
 async def retry_failed() -> dict:
     """Put failed jobs back in the queue (e.g. after fixing a configuration problem)."""
     async with pool().connection() as conn:

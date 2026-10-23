@@ -31,6 +31,10 @@ services:
       DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise
       APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in .env}
       DAILY_LLM_SPEND_CAP_USD: ${DAILY_LLM_SPEND_CAP_USD:-10}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Demo portal accounts (created on startup; passwords only in .env)
+      PLACEWISE_DEMO_ADMIN_PASSWORD: ${PLACEWISE_DEMO_ADMIN_PASSWORD:-}
+      PLACEWISE_DEMO_RECRUITER_PASSWORD: ${PLACEWISE_DEMO_RECRUITER_PASSWORD:-}
       # Owner's .env names → standard SDK names
       ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
       VOYAGE_API_KEY: ${PLACEWISE_VOYAGE_TEST_API_KEY:-}

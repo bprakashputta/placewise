@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     voyage_api_key: SecretStr | None = None
 
     daily_llm_spend_cap_usd: float = 10.0
+    cookie_secure: bool = False   # True when served over HTTPS (the public tunnel link)
 
     db_pool_min: int = 1
     db_pool_max: int = 10
