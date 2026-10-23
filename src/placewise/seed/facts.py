@@ -69,7 +69,7 @@ class Education(BaseModel):
 
 class Style(BaseModel):
     template: Literal["classic", "modern", "two_column", "ats_plain", "compact"]
-    persona: Literal["concise", "narrative", "senior_exec", "junior_academic", "technical_detail"]
+    persona: Literal["concise", "narrative", "senior_exec", "junior_academic", "technical_detail", "messy"]
     length: Literal["short", "medium", "long"]
     file_format: Literal["pdf", "docx", "txt"]
     header_style: Literal["standard", "caps", "unusual"]
@@ -108,6 +108,8 @@ class CandidateFacts(BaseModel):
     unreadable: Literal["image_pdf", "corrupt_docx"] | None = None
     split: Literal["dev", "test"] = "test"
     targets_job_order: str | None = None  # set when generated to satisfy a job order
+    quality: Literal["polished", "flawed", "unusable", "adversarial"] = "polished"
+    quality_issues: list[str] = []      # e.g. ["typos", "poorly_written"]: deliberate, so evals can check detection
 
     @property
     def full_name(self) -> str:
@@ -520,10 +522,32 @@ def generate(count: int, seed: int = 42) -> list[CandidateFacts]:
                 dup.style.file_format = "docx" if src.style.file_format != "docx" else "pdf"
             dup.tricky = [*dup.tricky, variant]
             extras.append(dup)
+    # Deliberately poorly written resumes (~8%), so "bad" is always intentional and labeled
+    for c in people:
+        if not c.unreadable and not c.injection and rng.random() < 0.08:
+            c.style.persona = "messy"
+            c.tricky.append("poorly_written")
+            if rng.random() < 0.6:
+                c.tricky.append("typos")
     allc = people + extras
     for c in allc:
         c.split = split_for(c.person_id, seed)
+        label_quality(c)
     return allc
+
+
+FLAW_KINDS = {"typos", "poorly_written", "short_resume", "unusual_headers", "career_gap"}
+
+
+def label_quality(c: CandidateFacts) -> None:
+    """Answer-key label for resume quality. The ingest pipeline should detect these on its own."""
+    if c.unreadable:
+        c.quality, c.quality_issues = "unusable", ["image_only_pdf" if c.unreadable == "image_pdf" else "corrupt_file"]
+    elif c.injection:
+        c.quality, c.quality_issues = "adversarial", ["prompt_injection"]
+    else:
+        issues = sorted(set(c.tricky) & FLAW_KINDS)
+        c.quality, c.quality_issues = ("flawed", issues) if issues else ("polished", [])
 
 
 def _add_new_job(rng: random.Random, c: CandidateFacts) -> bool:

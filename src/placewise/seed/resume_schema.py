@@ -3,7 +3,7 @@
 Structure is what makes layouts reliable: the renderer knows exactly which text is a job
 title, a company, a date or a bullet, instead of guessing from free text.
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ResumeJob(BaseModel):
@@ -25,6 +25,17 @@ class ResumeEducation(BaseModel):
 class ResumeSection(BaseModel):
     heading: str
     items: list[str]
+
+    @field_validator("items", mode="before")
+    @classmethod
+    def flatten(cls, v):
+        """The model sometimes nests lists one level deep for 'Selected Projects'. Flatten instead of rejecting."""
+        if isinstance(v, list):
+            out = []
+            for x in v:
+                out.extend(map(str, x) if isinstance(x, list) else [str(x)])
+            return out
+        return v
 
 
 class StructuredResume(BaseModel):

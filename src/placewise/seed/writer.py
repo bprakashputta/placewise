@@ -24,7 +24,7 @@ from .resume_schema import StructuredResume
 
 ALL_SOFTWARE = {sw for tools in SOFTWARE.values() for sw in tools}
 
-PROMPT_NAME, PROMPT_VERSION = "seed_resume_writer", 4
+PROMPT_NAME, PROMPT_VERSION = "seed_resume_writer", 5
 # USD per 1M tokens for claude-haiku-5-5 (platform.claude.com/docs pricing, checked 2026-10-22)
 PRICE_IN, PRICE_OUT = 0.10, 0.50
 
@@ -98,9 +98,14 @@ def structural_check(r: StructuredResume, c: CandidateFacts) -> list[str]:
     for sw in sorted(c.software, key=len, reverse=True):  # scrub allowed names, longest first
         text = re.sub(re.escape(sw), " ", text, flags=re.I)
     for sw in sorted(ALL_SOFTWARE - set(c.software), key=len, reverse=True):
+        # "Revit" is fine when the facts list "Revit MEP": same product family
+        if any(have.lower().startswith(sw.lower() + " ") for have in c.software):
+            continue
         if re.search(rf"(?<![\w-]){re.escape(sw)}(?![\w-])", text, flags=re.I):
             problems.append(f"software not in facts: {sw!r} (only use the facts' software list)")
-    if not c.open_to_relocation and re.search(r"relocat", " ".join(r.contact) + " " + r.summary, re.I):
+    # Only flag claims about the PERSON relocating; "utility relocation" is normal civil work
+    if not c.open_to_relocation and re.search(r"(open|willing|available)\s+(to|for)\s+relocat|relocat\w*\s*:",
+                                              " ".join(r.contact) + " " + r.summary, re.I):
         problems.append("do not mention relocation: the candidate is not open to relocation")
     want_edu = sorted((e.degree, e.school, str(e.year)) for e in c.education)
     got_edu = sorted((e.degree.strip(), e.school.strip(), e.year.strip()) for e in r.education)

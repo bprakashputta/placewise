@@ -11,18 +11,25 @@ type Stats = {
   candidates: number; people: number; written: number; rendered: number; job_orders: number;
   by_discipline: Record<string, number>; by_metro: Record<string, number>; by_format: Record<string, number>;
   by_split: Record<string, number>; credentials: Record<string, number>; tricky: Record<string, number>;
+  quality?: Record<string, number>;
   updated_at: string;
 };
 type Showcase = {
   candidate_id: string; name: string; discipline: string; city: string; metro: string; years_experience: number;
   current_title: string; current_employer: string; license_codes: string[]; credential_texts: string[];
-  software: string[]; tricky: string[]; file: string; file_format: string; template: string; note: string;
+  software: string[]; tricky: string[]; quality: string; quality_issues: string[]; file: string; file_format: string; template: string; note: string;
   text_preview: string;
 };
 type JobOrder = { job_order_id: string; title: string; split: string; notes: string | null; spec: Record<string, unknown> | null };
 type Status = { progress: Progress | null; stats: Stats | null; showcase: Showcase[]; job_orders: JobOrder[] };
 
 const nice = (s: string) => s.replace(/_/g, " ");
+const QUALITY_STYLE: Record<string, string> = {
+  polished: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  flawed: "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  unusable: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+  adversarial: "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-300",
+};
 const fmtSecs = (s: number | null) => (s == null ? "-" : s < 90 ? `${Math.round(s)}s` : `${Math.round(s / 60)} min`);
 
 function Card({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -129,6 +136,7 @@ export function SeedDashboard() {
             <Bars title="Metro" data={s.by_metro} total={s.candidates} />
             <Bars title="Credentials actually held" data={s.credentials} total={s.candidates} />
             <Bars title="Edge cases built in" data={s.tricky} total={s.candidates} />
+            {s.quality && <Bars title="Resume quality (deliberate, labeled)" data={s.quality} total={s.candidates} />}
           </section>
         </>
       )}
@@ -162,7 +170,7 @@ export function SeedDashboard() {
           <table className="w-full text-left text-sm">
             <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500 dark:bg-neutral-900">
               <tr><th className="px-3 py-2">Candidate</th><th className="px-3 py-2">Discipline</th><th className="px-3 py-2">Experience</th>
-                <th className="px-3 py-2">True credentials</th><th className="px-3 py-2">Edge cases</th><th className="px-3 py-2">File</th></tr>
+                <th className="px-3 py-2">True credentials</th><th className="px-3 py-2">Quality</th><th className="px-3 py-2">File</th></tr>
             </thead>
             <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
               {showcase.map((c) => (
@@ -182,9 +190,12 @@ export function SeedDashboard() {
                       )) : <span className="text-xs text-neutral-500">none</span>}
                       <p className="mt-1 text-xs text-neutral-500">as written: {c.credential_texts.join("; ") || "-"}</p>
                     </td>
-                    <td className="px-3 py-2">{c.tricky.map((t) => (
-                      <span key={t} className="mr-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">{nice(t)}</span>
-                    ))}{c.note && <p className="text-xs text-neutral-500">{c.note}</p>}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium capitalize ${QUALITY_STYLE[c.quality] ?? ""}`}>
+                        {c.quality}{c.quality !== "polished" && " (on purpose)"}</span>
+                      {c.quality_issues.length > 0 && <p className="mt-1 text-xs text-neutral-500">{c.quality_issues.map(nice).join(", ")}</p>}
+                      {c.note && <p className="text-xs text-neutral-500">{c.note}</p>}
+                    </td>
                     <td className="px-3 py-2">
                       <button onClick={() => setViewer({ title: c.name, subtitle: `${c.candidate_id} · ${c.template} template`,
                                 viewUrl: `/api/dev/seed/files/${c.candidate_id}/view`, downloadUrl: `/api/dev/seed/files/${c.candidate_id}` })}

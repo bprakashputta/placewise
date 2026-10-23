@@ -74,7 +74,9 @@ def cmd_write(args) -> None:
     if args.ids:
         wanted = set(args.ids.split(","))
         originals = [c for c in originals if c.candidate_id in wanted]
-    todo = [c for c in originals if args.force or c.candidate_id not in done]
+    # Redo anything missing or written with an older prompt version
+    todo = [c for c in originals if args.force or c.candidate_id not in done
+            or done[c.candidate_id].get("prompt_version") != PROMPT_VERSION]
     if args.limit:
         todo = todo[: args.limit]
     print(f"{len(todo)} resumes to write ({len(done)} already done, concurrency {args.concurrency})")
@@ -125,6 +127,12 @@ def cmd_render(args) -> None:
         gen = {k: v for k, v in gen.items() if k in wanted}
     rendered, by_cid = [], {}
     # Originals first, so exact duplicates can copy their source file byte-for-byte
+    from .writer import PROMPT_VERSION
+    # Only render resumes written in the current structured format; others wait for a rewrite
+    stale = [cid for cid, row in gen.items() if "resume" not in row and not row.get("copied_from")]
+    gen = {cid: row for cid, row in gen.items() if cid not in stale and cid in facts}
+    if stale:
+        print(f"skipping {len(stale)} resumes not yet in the current format (prompt v{PROMPT_VERSION})")
     order = sorted(gen, key=lambda cid: (facts[cid].variant == "exact_duplicate", cid))
     for cid in order:
         row, c = gen[cid], facts[cid]
@@ -199,6 +207,82 @@ def cmd_samples(args) -> None:
     print(f"cost ≈ ${sum(r.cost_usd for r in results):.3f}")
 
 
+def cmd_job_orders(args) -> None:
+    """Add targeted candidates, write recruiter notes (LLM), and build the matching answer key."""
+    from langchain_anthropic import ChatAnthropic
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    from . import job_orders as J
+    from . import prompts as P
+    from .facts import split_for
+
+    ensure_dirs()
+    cands = [c for c in load_facts() if not c.targets_job_order]          # idempotent: rebuild targets
+    targeted = J.targeted_candidates(start_index=len(cands) + 1, seed=args.seed)
+    allc = cands + targeted
+    with (TRUTH / "candidates.jsonl").open("w") as f:
+        for c in allc:
+            f.write(json.dumps({**c.model_dump(), "license_codes": c.license_codes}) + "\n")
+    print(f"targeted candidates: {len(targeted)} (total candidates now {len(allc)})")
+
+    # Job-order truth (specs) and their split
+    with (TRUTH / "job_orders.jsonl").open("w") as f:
+        for jo in J.SPECS:
+            f.write(jo.model_dump_json() + "\n")
+
+    # Answer key: every pair graded; store strong/partial plus every targeted candidate's row
+    key, counts = [], collections.Counter()
+    for jo in J.SPECS:
+        for c in allc:
+            lab = J.label(c, jo)
+            if lab["grade"] != "none" or (c.targets_job_order or "").startswith(jo.job_order_id):
+                key.append(lab)
+            counts[(jo.job_order_id, lab["grade"])] += 1
+    with (TRUTH / "relevance.jsonl").open("w") as f:
+        for row in key:
+            f.write(json.dumps(row) + "\n")
+    print("\njob order                          strong partial")
+    for jo in J.SPECS:
+        flag = "  (designed to have no strong match)" if jo.expect_no_match else ""
+        print(f"  {jo.job_order_id} {jo.title[:30]:<30} {counts[(jo.job_order_id, 'strong')]:>6} "
+              f"{counts[(jo.job_order_id, 'partial')]:>7}{flag}")
+
+    # Recruiter call notes via LLM (skip ones already written unless --force)
+    notes_path = GENERATED / "job_orders.jsonl"
+    existing = {}
+    if notes_path.exists():
+        existing = {r["job_order_id"]: r for r in map(json.loads, notes_path.open())}
+    p = P.load("seed_job_order_notes", 1)
+    llm = ChatAnthropic(model=p["model"], max_tokens=800, max_retries=4, timeout=60)
+    leave = {"work_mode": "onsite/hybrid/remote", "salary": "salary or pay rate",
+             "employment_type": "direct hire vs contract"}
+    cost = 0.0
+    for jo in J.SPECS:
+        if jo.job_order_id in existing and not args.force:
+            continue
+        include = [r.text for r in jo.must_have] + [f"nice to have: {r.text}" for r in jo.nice_to_have]
+        for fld in ("work_mode", "salary", "employment_type"):
+            if fld not in jo.omit_in_notes:
+                include.append(f"{fld.replace('_', ' ')}: {getattr(jo, fld)}")
+        include.append(f"location: {jo.city}")
+        user = p["user"].format(title=jo.title, client=jo.client, include="\n  ".join(f"- {x}" for x in include),
+                                leave_out=", ".join(leave[x] for x in jo.omit_in_notes) or "nothing")
+        msg = llm.invoke([SystemMessage(p["system"]), HumanMessage(user)])
+        text = msg.content if isinstance(msg.content, str) else "".join(b.get("text", "") for b in msg.content)
+        u = msg.usage_metadata or {}
+        cost += u.get("input_tokens", 0) / 1e6 * 0.10 + u.get("output_tokens", 0) / 1e6 * 0.50
+        existing[jo.job_order_id] = {"job_order_id": jo.job_order_id, "title": jo.title, "notes": text.strip(),
+                                     "prompt_version": 1}
+        print(f"  notes written: {jo.job_order_id}")
+    with notes_path.open("w") as f:
+        for jid in sorted(existing):
+            f.write(json.dumps(existing[jid]) + "\n")
+    print(f"notes cost ≈ ${cost:.4f}")
+    _ = split_for
+    from .public import publish
+    publish()
+
+
 def main() -> None:
     p = argparse.ArgumentParser(prog="placewise.seed")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -217,6 +301,10 @@ def main() -> None:
     r.set_defaults(func=cmd_render)
     sm = sub.add_parser("samples", help="one PDF per template (dev split) for visual review")
     sm.set_defaults(func=cmd_samples)
+    jo = sub.add_parser("job-orders", help="targeted candidates, recruiter notes, and the matching answer key")
+    jo.add_argument("--seed", type=int, default=42)
+    jo.add_argument("--force", action="store_true", help="rewrite notes even if they exist")
+    jo.set_defaults(func=cmd_job_orders)
     args = p.parse_args()
     args.func(args)
 

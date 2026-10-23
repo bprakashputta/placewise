@@ -38,6 +38,7 @@ def publish(showcase_n: int = 12) -> dict:
         "by_split": count(lambda c: [c["split"]]),
         "credentials": count(lambda c: c["license_codes"]),
         "tricky": count(lambda c: c["tricky"]),
+        "quality": count(lambda c: [c.get("quality", "polished")]),
         "job_orders": len(jos),
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
@@ -50,10 +51,11 @@ def publish(showcase_n: int = 12) -> dict:
         if c["discipline"] not in seen:
             picked.append(c)
             seen.add(c["discipline"])
+    # Then deliberately flawed examples, so the labels are visible next to polished ones
     for c in showcase_pool:
         if len(picked) >= showcase_n:
             break
-        if c["tricky"] and c not in picked:
+        if c.get("quality") in ("flawed", "adversarial") and c not in picked:
             picked.append(c)
     showcase = [{
         "candidate_id": c["candidate_id"], "name": f"{c['first_name']} {c['last_name']}",
@@ -62,6 +64,7 @@ def publish(showcase_n: int = 12) -> dict:
         "current_employer": c["current_employer"], "license_codes": c["license_codes"],
         "credential_texts": [x["text"] for x in c["credentials"]], "software": c["software"],
         "tricky": c["tricky"], "variant": c["variant"],
+        "quality": c.get("quality", "polished"), "quality_issues": c.get("quality_issues", []),
         "file": files[c["candidate_id"]]["path"], "file_format": files[c["candidate_id"]]["file_format"],
         "template": files[c["candidate_id"]]["template"], "note": files[c["candidate_id"]].get("note", ""),
         "text_preview": (gen.get(c["candidate_id"], {}).get("text_final") or "")[:1500],

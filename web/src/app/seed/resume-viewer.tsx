@@ -1,24 +1,48 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type ViewerTarget = { title: string; viewUrl: string; downloadUrl: string; subtitle?: string };
+type Load = { state: "loading" } | { state: "ready"; url: string } | { state: "error"; message: string };
 
 // In-page resume viewer: shows the PDF in place, with Download and Close (Esc also closes).
+// The file is fetched once. A PDF is shown in the frame; an error becomes a readable message.
 export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const [load, setLoad] = useState<Load>({ state: "loading" });
 
   useEffect(() => {
     if (!target) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden"; // stop the page behind from scrolling
+    document.body.style.overflow = "hidden";
     closeRef.current?.focus();
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
   }, [target, onClose]);
+
+  useEffect(() => {
+    if (!target) return;
+    let objectUrl: string | null = null;
+    let alive = true;
+    setLoad({ state: "loading" });
+    fetch(target.viewUrl, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.json().catch(() => null);
+          throw new Error(body?.detail ?? `Couldn't load this resume (error ${res.status}).`);
+        }
+        objectUrl = URL.createObjectURL(await res.blob());
+        if (alive) setLoad({ state: "ready", url: objectUrl });
+      })
+      .catch((e: Error) => alive && setLoad({ state: "error", message: e.message }));
+    return () => {
+      alive = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [target]);
 
   if (!target) return null;
   return (
@@ -43,7 +67,20 @@ export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null;
             </button>
           </div>
         </div>
-        <iframe src={target.viewUrl} title={`Resume: ${target.title}`} className="h-full w-full flex-1 bg-neutral-100" />
+        {load.state === "loading" && (
+          <div className="flex flex-1 items-center justify-center text-sm text-neutral-500">Loading resume…</div>
+        )}
+        {load.state === "error" && (
+          <div className="flex flex-1 items-center justify-center p-8">
+            <div className="max-w-md rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              <p className="mb-1 font-medium">Can&apos;t show this resume here</p>
+              <p>{load.message}</p>
+            </div>
+          </div>
+        )}
+        {load.state === "ready" && (
+          <iframe src={load.url} title={`Resume: ${target.title}`} className="h-full w-full flex-1 bg-neutral-100" />
+        )}
       </div>
     </div>
   );

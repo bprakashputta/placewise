@@ -5,6 +5,7 @@ It never reads data/seed/truth, which isn't even mounted into the api container.
 """
 import json
 import os
+import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -73,8 +74,12 @@ def view(candidate_id: str):
     original = _original(folder)
     target = original if original.suffix == ".pdf" else folder / PREVIEW_NAME
     if not target.exists():
-        raise HTTPException(409, "No preview: this file is intentionally corrupt (a test case for the ingest "
-                                 "pipeline).")
+        # Check the file itself rather than assuming: a DOCX is a zip archive.
+        if original.suffix == ".docx" and not zipfile.is_zipfile(original):
+            raise HTTPException(409, "This DOCX can't be opened because it is corrupt. That's intentional: it's "
+                                     "a test case for the ingest pipeline. You can still download it.")
+        raise HTTPException(404, f"No in-browser preview for this {original.suffix.lstrip('.').upper()} file yet. "
+                                 "It's created on the next render. Use Download to open the original.")
     return FileResponse(target, media_type="application/pdf", content_disposition_type="inline",
                         filename=original.with_suffix(".pdf").name)
 
