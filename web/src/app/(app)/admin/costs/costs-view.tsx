@@ -153,12 +153,12 @@ export function CostsView() {
             )}
             {rows.map((r) => (
               <TableRow key={`${r.step}-${r.model}`}>
-                <TableCell className="px-4 font-medium">{humanize(r.step)}</TableCell>
+                <TableCell className="px-4 font-medium">{r.step.split(".").map(humanize).join(" › ")}</TableCell>
                 <TableCell className="px-4 font-mono text-xs">{r.model}</TableCell>
                 <TableCell className="px-4 text-right tabular-nums">{formatNumber(r.calls)}</TableCell>
                 <TableCell className="px-4 text-right tabular-nums">{formatNumber(r.input_tokens)}</TableCell>
                 <TableCell className="px-4 text-right tabular-nums">{formatNumber(r.output_tokens)}</TableCell>
-                <TableCell className="px-4 text-right font-medium tabular-nums">{formatUsd(r.cost_usd)}</TableCell>
+                <TableCell className="px-4 text-right font-medium tabular-nums">{formatUsd(r.cost_usd, r.cost_usd > 0 && r.cost_usd < 0.1 ? 3 : 2)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

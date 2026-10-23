@@ -192,8 +192,8 @@ function CandidateTable() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_7rem]">
-        <div className="sm:col-span-2 lg:col-span-1">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_7rem]">
+        <div className="col-span-2 lg:col-span-1">
           <div className="flex gap-2">
             <div className="min-w-0 flex-1">
               <SearchInput value={q} onChange={onSearch} smart={smart} />
