@@ -157,9 +157,18 @@ def cmd_render(args) -> None:
     all_gen = load_generated()
     all_gen.update(gen)
     save_generated(all_gen)
-    with (GENERATED / "files.jsonl").open("w") as f:
-        for info in sorted(rendered, key=lambda i: i["candidate_id"]):
-            f.write(json.dumps(info) + "\n")
+    # Merge into the existing index: a partial render (--ids) must not drop other files
+    index_path = GENERATED / "files.jsonl"
+    index = {}
+    if index_path.exists():
+        index = {r["candidate_id"]: r for r in map(json.loads, index_path.open())}
+    index.update({i["candidate_id"]: i for i in rendered})
+    index = {cid: i for cid, i in index.items() if cid in facts}
+    tmp = index_path.with_suffix(".tmp")
+    with tmp.open("w") as f:
+        for cid in sorted(index):
+            f.write(json.dumps(index[cid]) + "\n")
+    tmp.replace(index_path)
     fmt = collections.Counter(i["file_format"] for i in rendered)
     notes = collections.Counter(i["note"] for i in rendered if i.get("note"))
     from .public import publish
