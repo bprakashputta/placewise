@@ -566,7 +566,8 @@ def generate(count: int, seed: int = 42) -> list[CandidateFacts]:
     return allc
 
 
-FLAW_KINDS = {"typos", "poorly_written", "short_resume", "unusual_headers", "career_gap"}
+# "short_resume" is not a flaw: with structured writing (prompt v4+) it is just a tidy one-page resume
+FLAW_KINDS = {"typos", "poorly_written", "unusual_headers", "career_gap"}
 
 
 def label_quality(c: CandidateFacts) -> None:
