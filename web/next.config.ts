@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  // The test data page moved into the portal shell; keep the old dev URL working.
+  async redirects() {
+    return [{ source: "/seed", destination: "/admin/test-data", permanent: false }];
+  },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${API_INTERNAL_URL}/api/:path*` }];
   },

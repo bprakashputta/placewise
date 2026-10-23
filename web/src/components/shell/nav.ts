@@ -21,9 +21,9 @@ export const MAIN_NAV: NavItem[] = [
   { title: "Approvals", href: "/approvals", icon: ClipboardCheck },
 ];
 
-// "Test data" is the dev seed page; it lives outside the portal layout for now.
+// "Test data" is the dev seed page (the old /seed URL redirects to it).
 export const ADMIN_NAV: NavItem[] = [
-  { title: "Test data", href: "/seed", icon: Database, badge: "Dev" },
+  { title: "Test data", href: "/admin/test-data", icon: Database, badge: "Dev" },
   { title: "Evals", href: "/admin/evals", icon: FlaskConical },
   { title: "AI costs", href: "/admin/costs", icon: CircleDollarSign },
   { title: "How it works", href: "/admin/architecture", icon: Network },
