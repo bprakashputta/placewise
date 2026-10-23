@@ -14,6 +14,21 @@ import { ApiError, useApi, type Costs } from "@/lib/api";
 import { formatNumber, formatUsd, humanize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+const STEP_LABELS: Record<string, string> = {
+  "rag.answer": "Ask: answer",
+  "rag.understand": "Ask: understand question",
+  "ingest.extract": "Resume extraction",
+  "match.score": "Matching: score candidate",
+  "job_order.extract": "Job order: structure notes",
+};
+
+function stepLabel(step: string) {
+  return STEP_LABELS[step] ?? step.split(".").map(humanize).join(" › ");
+}
+
+// A matching run scores up to 12 candidates, one model call each (see the match graph).
+const CANDIDATES_PER_SHORTLIST = 12;
+
 function shortDay(day: string) {
   // "2026-10-22" → "Oct 22" (parsed as a calendar date, not shifted by the local timezone)
   const [y, m, d] = day.slice(0, 10).split("-").map(Number);
@@ -55,7 +70,7 @@ function ByDayChart({ days }: { days: Costs["by_day"] }) {
             tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
           />
           <Tooltip content={<DayTooltip />} cursor={{ fill: "var(--muted)", opacity: 0.6 }} />
-          <Bar dataKey="cost_usd" fill="var(--brand)" radius={[4, 4, 0, 0]} maxBarSize={40} />
+          <Bar dataKey="cost_usd" fill="var(--brand)" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive={false} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -90,6 +105,25 @@ export function CostsView() {
     (t, r) => ({ calls: t.calls + r.calls, input: t.input + r.input_tokens, output: t.output + r.output_tokens, cost: t.cost + r.cost_usd }),
     { calls: 0, input: 0, output: 0, cost: 0 },
   );
+  const sumStep = (step: string) =>
+    rows.filter((r) => r.step === step).reduce((t, r) => ({ calls: t.calls + r.calls, cost: t.cost + r.cost_usd }), { calls: 0, cost: 0 });
+  const ingest = sumStep("ingest.extract");
+  const scoring = sumStep("match.score");
+  const perResume = ingest.calls > 0 ? ingest.cost / ingest.calls : null;
+  const shortlistRuns = scoring.calls / CANDIDATES_PER_SHORTLIST;
+  const perShortlist = shortlistRuns > 0 ? scoring.cost / shortlistRuns : null;
+  const unitCards = [
+    {
+      label: "Average cost per resume",
+      value: perResume,
+      note: `Resume extraction cost ÷ ${formatNumber(ingest.calls)} extraction calls.`,
+    },
+    {
+      label: "Average cost per shortlist",
+      value: perShortlist,
+      note: `Approximate: scoring cost ÷ about ${formatNumber(Math.round(shortlistRuns))} runs (${CANDIDATES_PER_SHORTLIST} candidates scored per run).`,
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -128,6 +162,22 @@ export function CostsView() {
         </Card>
       </div>
 
+      <div className="grid gap-6 sm:grid-cols-2">
+        {unitCards.map((c) => (
+          <Card key={c.label}>
+            <CardHeader>
+              <CardDescription>{c.label}</CardDescription>
+              <CardTitle className="text-3xl font-semibold tabular-nums">
+                {!data ? <Skeleton className="h-9 w-24" /> : c.value === null ? "–" : formatUsd(c.value, c.value < 0.1 ? 3 : 2)}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">{data ? c.note : " "}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
       <Card className="gap-0 overflow-hidden pb-0">
         <CardHeader className="pb-4">
           <CardTitle>By step and model</CardTitle>
@@ -153,7 +203,7 @@ export function CostsView() {
             )}
             {rows.map((r) => (
               <TableRow key={`${r.step}-${r.model}`}>
-                <TableCell className="px-4 font-medium">{r.step.split(".").map(humanize).join(" › ")}</TableCell>
+                <TableCell className="px-4 font-medium">{stepLabel(r.step)}</TableCell>
                 <TableCell className="px-4 font-mono text-xs">{r.model}</TableCell>
                 <TableCell className="px-4 text-right tabular-nums">{formatNumber(r.calls)}</TableCell>
                 <TableCell className="px-4 text-right tabular-nums">{formatNumber(r.input_tokens)}</TableCell>

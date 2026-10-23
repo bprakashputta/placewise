@@ -11,9 +11,29 @@ import { ResumeViewer, type ViewerTarget } from "@/components/resume-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ApiError, apiFetch, type AskResponse, type Citation } from "@/lib/api";
-import { disciplineLabel, formatUsd, formatYears, humanize, licenseLabel } from "@/lib/format";
+import { useUser } from "@/components/auth/user-provider";
+import { ApiError, apiFetch, type AskCandidate, type AskResponse, type Citation } from "@/lib/api";
+import { disciplineLabel, formatUsd, formatYears, humanize, licenseLabel, qualityLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+// Resume section names from the search index → recruiter wording.
+const SECTION_LABELS: Record<string, string> = {
+  job: "Work history",
+  jobs: "Work history",
+  summary: "Summary",
+  credentials: "Licenses & certifications",
+  skills: "Skills",
+  education: "Education",
+};
+
+function sectionLabel(section: string): string {
+  return SECTION_LABELS[section] ?? humanize(section);
+}
+
+/** "Austin · Austin" → "Austin": the metro is only worth showing when it adds something. */
+function placeLabel(city: string | null, metro: string | null): string {
+  return [city, metro && metro !== city ? metro : null].filter(Boolean).join(" · ");
+}
 
 const EXAMPLES = [
   "Who holds a Texas PE with drainage experience in DFW?",
@@ -57,7 +77,7 @@ function filterChips(filters: Record<string, unknown>): string[] {
     else if (key === "discipline") chips.push(disciplineLabel(String(value)));
     else if (key === "metro") chips.push(String(value));
     else if (value === true) chips.push(humanize(key));
-    else chips.push(key === "quality" ? humanize(String(value)) : String(value));
+    else chips.push(key === "quality" ? qualityLabel(String(value)) : String(value));
   }
   return chips;
 }
@@ -121,8 +141,45 @@ function PendingStages() {
   );
 }
 
+function CandidateCard({ c, cited }: { c: AskCandidate; cited: boolean }) {
+  return (
+    <li className={cn("flex flex-col gap-2 rounded-lg border bg-card p-3", cited && "border-brand/40")}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link href={`/candidates/${c.person_id}`} className="text-sm font-medium hover:underline">
+              {c.full_name}
+            </Link>
+            {cited && <Badge className="h-4 bg-brand-soft px-1.5 text-[10px] text-brand">Cited</Badge>}
+          </div>
+          <p className="line-clamp-1 text-xs text-muted-foreground">{c.headline ?? disciplineLabel(c.discipline)}</p>
+        </div>
+        <QualityBadge quality={c.quality} short className="shrink-0" />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {[placeLabel(c.city, c.metro), c.years_experience !== null ? formatYears(c.years_experience) : null].filter(Boolean).join(" · ")}
+      </p>
+      <div className="flex flex-wrap items-center gap-1">
+        {c.license_codes.map((code) => (
+          <Badge key={code} variant="outline" className="font-normal">
+            {licenseLabel(code)}
+          </Badge>
+        ))}
+        <Button variant="ghost" size="xs" asChild className="ml-auto">
+          <Link href={`/candidates/${c.person_id}`}>View</Link>
+        </Button>
+      </div>
+    </li>
+  );
+}
+
 function Answer({ r, onCite }: { r: AskResponse; onCite: (c: Citation) => void }) {
+  const { user } = useUser();
+  const isAdmin = user?.role === "admin";
   const chips = filterChips(r.plan?.filters ?? {});
+  const citedIds = new Set(r.citations.map((c) => c.person_id));
+  const cited = r.candidates.filter((c) => citedIds.has(c.person_id));
+  const others = r.candidates.filter((c) => !citedIds.has(c.person_id));
   return (
     <div className="space-y-5">
       <div className="text-sm">
@@ -142,10 +199,16 @@ function Answer({ r, onCite }: { r: AskResponse; onCite: (c: Citation) => void }
           </Badge>
         ))}
         {r.plan?.search_query && <span className="min-w-0 text-muted-foreground italic">&ldquo;{r.plan.search_query}&rdquo;</span>}
-        <span className="ml-auto text-muted-foreground tabular-nums">
-          {r.timings_ms?.total_ms ? `${(r.timings_ms.total_ms / 1000).toFixed(1)} s` : ""}
-          {r.cost_usd !== undefined && ` · ${formatUsd(r.cost_usd, 3)}`}
-        </span>
+        {isAdmin && (
+          <span className="ml-auto text-muted-foreground tabular-nums">
+            {[
+              r.timings_ms?.total_ms ? `${(r.timings_ms.total_ms / 1000).toFixed(1)} s` : null,
+              r.cost_usd !== undefined ? formatUsd(r.cost_usd, 3) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        )}
       </div>
 
       {r.citations.length > 0 && (
@@ -166,7 +229,7 @@ function Answer({ r, onCite }: { r: AskResponse; onCite: (c: Citation) => void }
                   >
                     {c.candidate_name}
                   </button>
-                  <span className="text-muted-foreground"> · {humanize(c.section)} · </span>
+                  <span className="text-muted-foreground"> · {sectionLabel(c.section)} · </span>
                   <Link href={`/candidates/${c.person_id}`} className="text-xs text-brand hover:underline">
                     Profile
                   </Link>
@@ -185,36 +248,25 @@ function Answer({ r, onCite }: { r: AskResponse; onCite: (c: Citation) => void }
         </p>
       )}
 
-      {r.candidates.length > 0 && (
-        <section aria-label="Matching candidates" className="space-y-2">
-          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Matching candidates ({r.candidates.length})</h3>
+      {cited.length > 0 && (
+        <section aria-label="Candidates cited in the answer" className="space-y-2">
+          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Cited in the answer ({cited.length})</h3>
           <ul className="grid gap-2 sm:grid-cols-2">
-            {r.candidates.map((c) => (
-              <li key={c.person_id} className="flex flex-col gap-2 rounded-lg border bg-card p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <Link href={`/candidates/${c.person_id}`} className="text-sm font-medium hover:underline">
-                      {c.full_name}
-                    </Link>
-                    <p className="line-clamp-1 text-xs text-muted-foreground">{c.headline ?? disciplineLabel(c.discipline)}</p>
-                  </div>
-                  <QualityBadge quality={c.quality} className="shrink-0" />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {[c.city, c.metro].filter(Boolean).join(" · ")}
-                  {c.years_experience !== null && ` · ${formatYears(c.years_experience)}`}
-                </p>
-                <div className="flex flex-wrap items-center gap-1">
-                  {c.license_codes.map((code) => (
-                    <Badge key={code} variant="outline" className="font-normal">
-                      {licenseLabel(code)}
-                    </Badge>
-                  ))}
-                  <Button variant="ghost" size="xs" asChild className="ml-auto">
-                    <Link href={`/candidates/${c.person_id}`}>View</Link>
-                  </Button>
-                </div>
-              </li>
+            {cited.map((c) => (
+              <CandidateCard key={c.person_id} c={c} cited />
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {others.length > 0 && (
+        <section aria-label="Other candidates the search found" className="space-y-2">
+          <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Other candidates the search found ({others.length})
+          </h3>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {others.map((c) => (
+              <CandidateCard key={c.person_id} c={c} cited={false} />
             ))}
           </ul>
         </section>
@@ -258,7 +310,7 @@ export function AskView() {
   const onCite = (c: Citation) =>
     setViewer({
       title: c.candidate_name,
-      subtitle: `${humanize(c.section)}: “${c.quote}”`,
+      subtitle: `${sectionLabel(c.section)}: “${c.quote}”`,
       viewUrl: `/api/candidates/files/${c.resume_file_id}/view`,
       downloadUrl: `/api/candidates/files/${c.resume_file_id}`,
     });

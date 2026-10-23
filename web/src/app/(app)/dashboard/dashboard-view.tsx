@@ -10,15 +10,16 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApi, type Stats } from "@/lib/api";
 import type { JobOrderRow } from "@/lib/job-types";
-import { formatNumber, formatUsd, humanize } from "@/lib/format";
+import { formatNumber, formatUsd, qualityLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { NewJobOrderDialog } from "../job-orders/new-job-order-dialog";
 
 const QUALITY_ORDER = ["polished", "flawed", "adversarial", "unusable"];
 const QUALITY_HELP: Record<string, string> = {
-  polished: "Clean, well-structured resumes",
-  flawed: "Readable, with writing or formatting problems",
-  adversarial: "Hidden instructions aimed at AI, removed before extraction",
-  unusable: "Scanned or corrupt files that need a person",
+  polished: "Well-structured, ready to use",
+  flawed: "Readable, with typos, vague bullet points or gaps",
+  adversarial: "Hidden instructions aimed at AI, removed before reading",
+  unusable: "Scanned or damaged files that need a person",
 };
 
 function StatCard({
@@ -99,7 +100,7 @@ function QualityBreakdown({ byQuality, loading }: { byQuality?: Record<string, n
                 <li key={q} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className={cn("size-2 shrink-0 rounded-full", qualityStyle(q).dot)} aria-hidden="true" />
-                    <span className="text-sm font-medium">{humanize(q)}</span>
+                    <span className="text-sm font-medium">{qualityLabel(q)}</span>
                     <span className="hidden truncate text-xs text-muted-foreground sm:inline">{QUALITY_HELP[q]}</span>
                   </div>
                   <span className="text-sm tabular-nums">
@@ -135,6 +136,7 @@ export function DashboardView({ children }: { children: React.ReactNode }) {
       <PageHeader
         title={firstName ? `Welcome, ${firstName}` : "Welcome"}
         description="Here's where your candidate pool, job orders and approvals come together."
+        actions={<NewJobOrderDialog />}
       />
 
       <section aria-label="Key numbers" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

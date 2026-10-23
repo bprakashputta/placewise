@@ -19,10 +19,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi, type CandidateList, type CandidateRow, type Facets, type SearchResponse } from "@/lib/api";
 
-type Row = CandidateRow & { match?: string | null };
-import { disciplineLabel, formatNumber, formatYears, humanize, licenseLabel, relativeTime } from "@/lib/format";
+import { disciplineLabel, formatNumber, formatYears, licenseLabel, qualityLabel, relativeTime } from "@/lib/format";
 import { NeedsAttentionList } from "./needs-attention-list";
 import { UploadDialog } from "./upload-dialog";
+
+type Row = CandidateRow & { match?: string | null };
 
 const PAGE_SIZE = 50;
 const FILTERS = ["discipline", "metro", "license", "quality"] as const;
@@ -31,20 +32,20 @@ const ALL_LABELS: Record<FilterKey, string> = {
   discipline: "All disciplines",
   metro: "All metros",
   license: "All licenses",
-  quality: "All quality levels",
+  quality: "All resumes",
 };
 const FILTER_LABELS: Record<FilterKey, string> = {
   discipline: "Discipline",
   metro: "Metro",
   license: "License",
-  quality: "Quality",
+  quality: "Resume",
 };
 const ALL = "__all__"; // Radix Select can't use "" as an item value.
 
 function facetLabel(key: FilterKey, value: string) {
   if (key === "discipline") return disciplineLabel(value);
   if (key === "license") return licenseLabel(value);
-  if (key === "quality") return humanize(value);
+  if (key === "quality") return qualityLabel(value);
   return value;
 }
 
@@ -119,7 +120,7 @@ function SearchInput({ value, onChange, smart }: { value: string; onChange: (v: 
         type="search"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder={smart ? "Describe the candidate, e.g. hospital MEP design" : "Search name, title, employer, skills…"}
+        placeholder={smart ? "Describe the candidate, e.g. hospital MEP design" : "Search candidates…"}
         aria-label="Search candidates"
         className="pl-8"
       />
@@ -127,15 +128,17 @@ function SearchInput({ value, onChange, smart }: { value: string; onChange: (v: 
   );
 }
 
-const COLUMNS: { label: string; className?: string }[] = [
+const ALL_COLUMNS: { label: string; className?: string }[] = [
   { label: "Name" },
   { label: "Discipline", className: "hidden md:table-cell" },
   { label: "Location", className: "hidden lg:table-cell" },
   { label: "Credentials", className: "hidden sm:table-cell" },
   { label: "Experience", className: "hidden md:table-cell text-right" },
-  { label: "Quality" },
+  { label: "Resume" },
   { label: "Updated", className: "hidden xl:table-cell" },
 ];
+// Smart search results carry no processed date, so the Updated column is dropped there.
+const SMART_COLUMNS = ALL_COLUMNS.filter((c) => c.label !== "Updated");
 
 function CandidateTable() {
   const router = useRouter();
@@ -146,6 +149,7 @@ function CandidateTable() {
   const smart = params.get("mode") === "smart";
   const minYears = params.get("min_years") ?? "";
   const hasFilters = Boolean(q || minYears || FILTERS.some((k) => filters[k]));
+  const COLUMNS = smart ? SMART_COLUMNS : ALL_COLUMNS;
 
   const listPath = (() => {
     const api = new URLSearchParams();
@@ -174,7 +178,7 @@ function CandidateTable() {
     ? raw && "query" in raw
       ? {
           total: raw.items.length,
-          items: raw.items.map((i) => ({ ...i, subdiscipline: null, city: null, state: null, quality_issues: [], processed_at: null })),
+          items: raw.items.map((i) => ({ ...i, subdiscipline: null, city: i.city ?? null, state: null, quality_issues: [], processed_at: null })),
         }
       : undefined
     : raw && "total" in raw
@@ -315,28 +319,38 @@ function CandidateTable() {
                 </TableCell>
               </TableRow>
             )}
-            {data?.items.map((c) => {
+            {data?.items.map((c, idx) => {
               const href = `/candidates/${c.person_id}`;
+              const place = c.city ? [c.city, c.state].filter(Boolean).join(", ") : null;
+              const showMetro = c.metro && c.metro !== c.city;
               return (
                 <TableRow key={c.person_id} className="cursor-pointer" onClick={() => router.push(href)}>
                   <TableCell className="max-w-72 px-4 py-2.5 whitespace-normal">
-                    <Link href={href} className="font-medium hover:underline focus-visible:underline focus-visible:outline-none" onClick={(e) => e.stopPropagation()}>
-                      {c.full_name}
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      {smart && (
+                        <span className="text-xs text-muted-foreground tabular-nums" aria-label={`Rank ${idx + 1}`}>
+                          #{idx + 1}
+                        </span>
+                      )}
+                      <Link href={href} className="font-medium hover:underline focus-visible:underline focus-visible:outline-none" onClick={(e) => e.stopPropagation()}>
+                        {c.full_name}
+                      </Link>
+                      {smart && idx === 0 && (
+                        <Badge className="h-4 bg-brand-soft px-1.5 text-[10px] text-brand">Best match</Badge>
+                      )}
+                    </div>
                     <p className="line-clamp-1 text-xs text-muted-foreground">{c.headline ?? "–"}</p>
                     {c.match && (
-                      <p className="mt-1 line-clamp-2 border-l-2 border-brand/40 pl-2 text-xs text-muted-foreground italic">
-                        …{c.match}…
-                      </p>
+                      <p className="mt-1 line-clamp-2 border-l-2 border-brand/40 pl-2 text-xs text-muted-foreground italic">{c.match}</p>
                     )}
-                    <p className="text-xs text-muted-foreground lg:hidden">{[c.city, c.metro].filter(Boolean).join(" · ")}</p>
+                    <p className="text-xs text-muted-foreground lg:hidden">{[c.city, showMetro ? c.metro : null].filter(Boolean).join(" · ")}</p>
                   </TableCell>
                   <TableCell className="hidden px-4 md:table-cell">
                     <span className="text-sm">{disciplineLabel(c.discipline)}</span>
                   </TableCell>
                   <TableCell className="hidden px-4 lg:table-cell">
-                    <span className="text-sm">{c.city ? `${c.city}, ${c.state ?? ""}` : "–"}</span>
-                    {c.metro && <p className="text-xs text-muted-foreground">{c.metro}</p>}
+                    <span className="text-sm">{place ?? c.metro ?? "–"}</span>
+                    {place && showMetro && <p className="text-xs text-muted-foreground">{c.metro}</p>}
                   </TableCell>
                   <TableCell className="hidden max-w-56 px-4 whitespace-normal sm:table-cell">
                     <div className="flex flex-wrap gap-1">
@@ -350,9 +364,9 @@ function CandidateTable() {
                   </TableCell>
                   <TableCell className="hidden px-4 text-right tabular-nums md:table-cell">{formatYears(c.years_experience)}</TableCell>
                   <TableCell className="px-4">
-                    <QualityBadge quality={c.quality} issues={c.quality_issues} />
+                    <QualityBadge quality={c.quality} issues={c.quality_issues} short />
                   </TableCell>
-                  <TableCell className="hidden px-4 text-muted-foreground xl:table-cell">{relativeTime(c.processed_at)}</TableCell>
+                  {!smart && <TableCell className="hidden px-4 text-muted-foreground xl:table-cell">{relativeTime(c.processed_at)}</TableCell>}
                 </TableRow>
               );
             })}

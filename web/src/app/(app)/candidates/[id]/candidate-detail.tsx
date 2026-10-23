@@ -229,7 +229,10 @@ function QualityCard({ d }: { d: Detail }) {
         {wq && (
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">Writing quality</p>
+              <div>
+                <p className="text-sm font-medium">Writing quality</p>
+                <p className="text-xs text-muted-foreground">How well the resume is written (judged by AI)</p>
+              </div>
               <Badge className={cn("capitalize", RATING_STYLES[wq.rating] ?? "bg-muted text-muted-foreground")}>{wq.rating}</Badge>
             </div>
             {wq.issues.length > 0 && (
@@ -457,7 +460,7 @@ export function CandidateDetail({ params }: { params: Promise<{ id: string }> })
                         {humanize(v.status)} · <span title={formatDate(v.created_at)}>{relativeTime(v.processed_at ?? v.created_at)}</span>
                       </p>
                     </div>
-                    {v.quality && <QualityBadge quality={v.quality} className="shrink-0" />}
+                    {v.quality && <QualityBadge quality={v.quality} short className="shrink-0" />}
                   </li>
                 ))}
               </ul>

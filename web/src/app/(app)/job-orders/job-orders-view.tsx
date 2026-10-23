@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useApi } from "@/lib/api";
-import { disciplineLabel, relativeTime } from "@/lib/format";
+import { capitalize, disciplineLabel, relativeTime } from "@/lib/format";
 import type { JobOrderRow } from "@/lib/job-types";
 import { NewJobOrderDialog } from "./new-job-order-dialog";
 
@@ -101,7 +101,7 @@ export function JobOrdersView() {
                         {j.title}
                       </Link>
                       <p className="line-clamp-1 text-xs text-muted-foreground">
-                        {j.client ?? "–"} · created {relativeTime(j.created_at)}
+                        {j.client && `${capitalize(j.client)} · `}created {relativeTime(j.created_at)}
                       </p>
                     </TableCell>
                     <TableCell className="hidden px-4 md:table-cell">{j.metro ?? "–"}</TableCell>

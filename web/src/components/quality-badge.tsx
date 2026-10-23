@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { humanize, issueLabel } from "@/lib/format";
+import { issueLabel, qualityLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // polished = green, flawed = amber, unusable = red, adversarial = fuchsia (docs/api-contract.md).
@@ -36,10 +36,13 @@ export function qualityStyle(quality: string | null | undefined) {
 export function QualityBadge({
   quality,
   issues = [],
+  short = false,
   className,
 }: {
   quality: string | null | undefined;
   issues?: string[];
+  /** Short label where space is tight ("Tampered" instead of "Tampered (hidden instructions)"). */
+  short?: boolean;
   className?: string;
 }) {
   const style = qualityStyle(quality);
@@ -49,7 +52,7 @@ export function QualityBadge({
       tabIndex={issues.length > 0 ? 0 : undefined}
     >
       <span className={cn("size-1.5 rounded-full", style.dot)} aria-hidden="true" />
-      {quality ? humanize(quality) : "Unknown"}
+      {qualityLabel(quality, short)}
       {issues.length > 0 && <span className="sr-only">: {issues.map(issueLabel).join(", ")}</span>}
     </Badge>
   );

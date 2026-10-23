@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { FlaskConical } from "lucide-react";
-import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { Card } from "@/components/ui/card";
+import { EvalNumbers } from "../eval-numbers";
 
 export const metadata: Metadata = { title: "Evals" };
 
@@ -11,15 +9,13 @@ export default function EvalsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Evals"
-        description="Extraction accuracy, match quality and evidence grounding, measured against the synthetic answer key."
+        description="Extraction accuracy and screening, measured against the synthetic answer key."
       />
-      <Card className="py-0">
-        <EmptyState
-          icon={FlaskConical}
-          title="No eval runs yet"
-          description="Eval results appear here after the first run against the held-out test split."
-        />
-      </Card>
+      <EvalNumbers headingId="eval-numbers-heading" title="Resume ingest" />
+      <p className="text-xs text-muted-foreground">
+        These are fixed results from the last eval run, not live numbers. Synthetic resumes are cleaner than real ones, so treat them as an
+        optimistic upper bound.
+      </p>
     </div>
   );
 }

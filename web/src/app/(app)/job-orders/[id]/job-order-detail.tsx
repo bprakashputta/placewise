@@ -12,7 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError, apiFetch, useApi } from "@/lib/api";
-import { disciplineLabel, formatUsd, humanize, licenseLabel, relativeTime } from "@/lib/format";
+import { useUser } from "@/components/auth/user-provider";
+import { capitalize, cleanRequirement, disciplineLabel, formatUsd, humanize, licenseLabel, relativeTime } from "@/lib/format";
 import type { JobOrder, MatchesResponse, Requirement } from "@/lib/job-types";
 import { cn } from "@/lib/utils";
 import { Shortlist } from "./shortlist";
@@ -49,7 +50,7 @@ function Requirements({ items }: { items: Requirement[] }) {
                     <li key={i} className="flex gap-2.5 text-sm">
                       <span className={cn("mt-2 size-1.5 shrink-0 rounded-full", g.dot)} aria-hidden="true" />
                       <span className="min-w-0">
-                        {r.text}
+                        {cleanRequirement(r.text)}
                         {badge && (
                           <Badge variant="outline" className="ml-1.5 font-normal">
                             {badge}
@@ -180,6 +181,8 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [viewer, setViewer] = useState<ViewerTarget | null>(null);
+  const { user } = useUser();
+  const isAdmin = user?.role === "admin";
 
   const noRun = matches.error?.status === 404; // treat "no run yet" like an empty result
   const run = matches.data?.run ?? null;
@@ -250,7 +253,7 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">{j.title}</h1>
           <p className="text-sm text-muted-foreground">
-            {j.client ?? "Client not stated"} · created {relativeTime(j.created_at)}
+            {j.client ? capitalize(j.client) : "Client not stated"} · created {relativeTime(j.created_at)}
           </p>
         </div>
         <Button onClick={findCandidates} disabled={busy || (matches.data === undefined && !noRun)} className="shrink-0">
@@ -285,7 +288,7 @@ export function JobOrderDetail({ params }: { params: Promise<{ id: string }> }) 
             {run?.status === "done" && (
               <p className="text-xs text-muted-foreground tabular-nums">
                 {run.candidates ?? matches.data?.matches.length} scored · {relativeTime(run.finished_at)}
-                {run.cost_usd !== null && ` · ${formatUsd(run.cost_usd)}`}
+                {isAdmin && run.cost_usd !== null && ` · ${formatUsd(run.cost_usd)}`}
               </p>
             )}
           </div>

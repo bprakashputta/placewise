@@ -16,15 +16,49 @@ const CREDENTIALS: Record<string, string> = {
   TX_RID: "RID",
 };
 
+// Plain-word labels for screening and writing issues (shown in tooltips and badges).
 const ISSUES: Record<string, string> = {
   hidden_text: "Hidden text",
-  prompt_injection: "Instructions aimed at AI systems",
-  image_only_pdf: "Scanned image (no text layer)",
-  corrupt_file: "Corrupt file",
-  unusual_headers: "Unusual section headers",
+  prompt_injection: "Hidden instructions found",
+  image_only_pdf: "Scanned image (text can't be read)",
+  corrupt_file: "Damaged file",
+  typos: "Typos",
+  poorly_written: "Poorly written",
+  vague_bullets: "Vague bullet points",
+  inconsistent_formatting: "Inconsistent formatting",
+  run_on_sentences: "Run-on sentences",
+  unusual_headers: "Unusual section headings",
   unusual_headings: "Unusual section headings",
-  no_quantified_results: "No quantified results",
+  career_gap: "Career gap",
+  no_quantified_results: "No numbers or results",
+  very_short: "Very short resume",
+  no_dates: "No dates",
 };
+
+// Resume quality: the API keys stay the same, only the display labels change.
+const QUALITY: Record<string, { label: string; short: string }> = {
+  polished: { label: "Clean resume", short: "Clean resume" },
+  flawed: { label: "Needs cleanup", short: "Needs cleanup" },
+  unusable: { label: "Unreadable", short: "Unreadable" },
+  adversarial: { label: "Tampered (hidden instructions)", short: "Tampered" },
+};
+
+/** "adversarial" → "Tampered (hidden instructions)", or "Tampered" with short. */
+export function qualityLabel(value: string | null | undefined, short = false): string {
+  if (!value) return "Unknown";
+  const q = QUALITY[value];
+  return q ? (short ? q.short : q.label) : humanize(value);
+}
+
+/** Drops the extractor's "(preferred, not a deal breaker)" suffix: the Nice to have group already says it. */
+export function cleanRequirement(text: string): string {
+  return text.replace(/\s*\(preferred[^)]*\)\s*$/i, "").trim();
+}
+
+/** "mid-size civil firm" → "Mid-size civil firm". */
+export function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 /** "construction_management" → "Construction mgmt"; unknown values get sentence case. */
 export function disciplineLabel(value: string | null | undefined): string {

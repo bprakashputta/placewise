@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { ResumeViewer, type ViewerTarget } from "@/components/resume-viewer";
+import { qualityLabel } from "@/lib/format";
 
 type Progress = {
   stage: string; status: string; total: number; done: number; ok: number; rejected: number;
@@ -191,8 +192,8 @@ export function SeedDashboard() {
                       <p className="mt-1 text-xs text-neutral-500">as written: {c.credential_texts.join("; ") || "-"}</p>
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium capitalize ${QUALITY_STYLE[c.quality] ?? ""}`}>
-                        {c.quality}{c.quality !== "polished" && " (on purpose)"}</span>
+                      <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${QUALITY_STYLE[c.quality] ?? ""}`}>
+                        {qualityLabel(c.quality, true)}{c.quality !== "polished" && " (on purpose)"}</span>
                       {c.quality_issues.length > 0 && <p className="mt-1 text-xs text-neutral-500">{c.quality_issues.map(nice).join(", ")}</p>}
                       {c.note && <p className="text-xs text-neutral-500">{c.note}</p>}
                     </td>
