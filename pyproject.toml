@@ -1,0 +1,35 @@
+[project]
+name = "placewise"
+version = "0.1.0"
+description = "AI recruiter copilot for A/E/C staffing: job-order intake, hybrid RAG candidate matching, grounded scoring, outreach drafts, and a tool-using agent."
+authors = [
+    { name = "Bhanu Prakash Putta", email = "bhanu.putta1999@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=2.1.0",
+    "fastapi>=0.161.0",
+    "fastembed>=0.9.0",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "numpy>=2.5.4",
+    "openai>=3.36.1",
+    "pgvector>=0.5.1",
+    "psycopg[binary]>=3.3.6",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.16.1",
+    "python-dotenv>=1.2.4",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.uv.build-backend]
+module-name = "copilot"
