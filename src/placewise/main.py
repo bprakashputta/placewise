@@ -15,10 +15,14 @@ from . import __version__
 from .config import get_settings
 from .db import close_pool, open_pool
 from .health import check_db, check_langsmith
+from .ingest_api import dev_router as ingest_dev_router
+from .ingest_api import router as ingest_router
+from .migrate import migrate
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await asyncio.to_thread(migrate)  # idempotent; an advisory lock serializes api and worker
     await open_pool()
     yield
     await close_pool()
@@ -63,6 +67,7 @@ async def health(response: Response) -> dict:
 
 
 app.include_router(api)
+app.include_router(ingest_router)
 
 if DEV:
     @traceable(name="placewise.trace_check", run_type="chain")
@@ -79,3 +84,4 @@ if DEV:
     from .dev_seed import router as dev_seed_router
 
     app.include_router(dev_seed_router)
+    app.include_router(ingest_dev_router)
