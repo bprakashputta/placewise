@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, Suspense, useEffect, useRef } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -11,6 +12,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { breadcrumbFor } from "./nav";
@@ -98,6 +100,12 @@ export function TopBar() {
       </Breadcrumb>
       <div className="flex items-center gap-1 sm:gap-2">
         <SearchBox />
+        {/* Phones: the search field is hidden, so offer a button to the searchable table. */}
+        <Button variant="ghost" size="icon" className="sm:hidden" asChild>
+          <Link href="/candidates" aria-label="Search candidates">
+            <Search />
+          </Link>
+        </Button>
         <ThemeToggle />
         <UserMenu />
       </div>

@@ -125,14 +125,15 @@ function Donut({ entries, total }: { entries: (readonly [string, number])[]; tot
   const r = 42;
   const c = 2 * Math.PI * r;
   const gap = entries.length > 1 ? 2.5 : 0; // surface gap between segments
-  let offset = 0;
+  const lens = entries.map(([, n]) => (total ? (n / total) * c : 0));
+  const starts = lens.map((_, i) => lens.slice(0, i).reduce((a, b) => a + b, 0));
   return (
     <div className="relative size-40 shrink-0">
       <svg viewBox="0 0 100 100" className="size-full -rotate-90" aria-hidden="true">
         <circle cx="50" cy="50" r={r} fill="none" strokeWidth="11" className="stroke-muted" />
-        {entries.map(([q, n]) => {
-          const len = total ? (n / total) * c : 0;
-          const seg = (
+        {entries.map(([q], i) => {
+          const len = lens[i];
+          return (
             <circle
               key={q}
               cx="50"
@@ -142,11 +143,9 @@ function Donut({ entries, total }: { entries: (readonly [string, number])[]; tot
               strokeWidth="11"
               className={QUALITY_STROKE[q] ?? "stroke-muted-foreground"}
               strokeDasharray={`${Math.max(0, len - gap)} ${c}`}
-              strokeDashoffset={-offset}
+              strokeDashoffset={-starts[i]}
             />
           );
-          offset += len;
-          return seg;
         })}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -328,7 +327,7 @@ function QuickActions() {
       <h2 id="quick-actions" className="text-[15px] font-semibold tracking-[-0.01em]">
         Quick actions
       </h2>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3 [&>*]:min-w-0">
         <NewJobOrderDialog trigger={<ActionTile icon={Plus} title="New job order" body="Paste notes from a hiring-manager call" />} />
         <UploadDialog trigger={<ActionTile icon={FileUp} title="Upload resume" body="PDF or Word, screened before AI reads it" />} />
         <Link
