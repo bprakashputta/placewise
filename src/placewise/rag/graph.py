@@ -30,6 +30,8 @@ class AskState(TypedDict, total=False):
     hits: list
     candidates: list
     names: dict
+    profiles: dict                     # person_id → profile row, loaded once in rerank
+    answer_chunks: list                # the exact sections shown to the answer model (citations resolve here)
     answer: dict
     dropped: list
     usage: dict
@@ -86,8 +88,9 @@ async def n_rerank(s: AskState) -> AskState:
     q = QueryPlan.model_validate(s["plan"]).search_query or s["question"]
     hits = await rerank(q, s["hits"][:60], top_k=40, run_ref="ask") if s["hits"] else []
     groups = group_by_candidate(hits, "rerank", per_person=CHUNKS_PER_CANDIDATE)
-    names = {pid: p["full_name"] for pid, p in (await _profiles([g.person_id for g in groups[:20]])).items()}
-    return {"hits": hits, "candidates": groups[:20], "names": names,
+    profiles = await _profiles([g.person_id for g in groups[:20]])
+    names = {pid: p["full_name"] for pid, p in profiles.items()}
+    return {"hits": hits, "candidates": groups[:20], "names": names, "profiles": profiles,
             "timings": {**s["timings"], "rerank_ms": int((time.perf_counter() - t0) * 1000)}}
 
 
@@ -97,13 +100,13 @@ async def n_answer(s: AskState) -> AskState:
     if not top:
         return {"answer": {"answer": "No candidates match these requirements. Try loosening a filter "
                                      "(for example a license state or the metro).", "citations": []},
-                "dropped": [], "timings": {**s["timings"], "answer_ms": 0}}
+                "dropped": [], "answer_chunks": [], "timings": {**s["timings"], "answer_ms": 0}}
     await spend_check()
     # Always include each candidate's credentials section (license evidence), plus verified facts
     person_ids = [g.person_id for g in s["candidates"][:MAX_ANSWER_CANDIDATES]]
     have = {h.chunk_id for h in top}
     top += [h for h in await _credential_chunks(person_ids) if h.chunk_id not in have]
-    profiles = await _profiles(person_ids)
+    profiles = {pid: s["profiles"][pid] for pid in person_ids if pid in s.get("profiles", {})}
     f = QueryPlan.model_validate(s["plan"]).filters
     parts = [f"discipline {f.discipline}" if f.discipline else "", f"metro {f.metro} (or open to relocation)"
              if f.metro else "", ", ".join(f"license {c}" for c in f.license_codes),
@@ -113,7 +116,7 @@ async def n_answer(s: AskState) -> AskState:
     await log_call("ask", "rag.answer", usage["model"], ANSWER_PROMPT_VERSION, usage.get("input_tokens", 0),
                    usage.get("output_tokens", 0), usage["latency_ms"], usage["cost_usd"],
                    "invalid_output" if ans.answer.startswith("I couldn't produce") else "ok")
-    return {"answer": ans.model_dump(), "dropped": dropped, "usage": {**s["usage"], "answer": usage},
+    return {"answer": ans.model_dump(), "dropped": dropped, "answer_chunks": top, "usage": {**s["usage"], "answer": usage},
             "timings": {**s["timings"], "answer_ms": int((time.perf_counter() - t0) * 1000)}}
 
 
@@ -140,13 +143,16 @@ async def ask(question: str, filters_override: dict | None = None, plan_override
                              "plan_override": plan_override, "person_ids": person_ids},
                             config={"run_name": run_name, "tags": ["rag", "ask"],
                                     "metadata": {"question": question[:200]}})
-    profiles = await _profiles([g.person_id for g in s["candidates"]])
+    profiles = s.get("profiles", {})
+    # Citations resolve against the exact sections the answer model saw (kept in state), so a resume
+    # reprocessed mid-question can't break the lookup.
     by_chunk = {h.chunk_id: h for h in s["hits"]}
-    by_chunk.update({h.chunk_id: h for h in await _credential_chunks([g.person_id for g in s["candidates"]
-                                                                       [:MAX_ANSWER_CANDIDATES]])})
+    by_chunk.update({h.chunk_id: h for h in s.get("answer_chunks", [])})
     citations = []
     for c in s["answer"]["citations"]:
-        h = by_chunk[c["chunk_id"]]
+        h = by_chunk.get(c["chunk_id"])
+        if h is None:
+            continue
         citations.append({"chunk_id": h.chunk_id, "person_id": h.person_id, "resume_file_id": h.resume_file_id,
                           "candidate_name": s["names"].get(h.person_id), "section": h.section, "quote": c["quote"]})
     candidates = []

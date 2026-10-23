@@ -42,6 +42,7 @@ def _sem() -> asyncio.Semaphore:
 MATCH_PROMPT_VERSION = 2
 MIN_QUOTE_CHARS = 12
 STALE_RUN_MIN = 10
+TIMED_OUT = "timed out; please run matching again"
 WEIGHT = {"must": 3.0, "nice": 1.0}
 VALUE = {"met": 1.0, "partial": 0.5, "unknown": 0.25, "not_met": 0.0}
 _models: dict = {}
@@ -241,8 +242,10 @@ async def assess(spec: JobSpec, prof: dict, sem: asyncio.Semaphore, run_id: str)
             flags, summary = list(a.flags), a.summary
             text = _norm(prof.get("blind_text") or "")
             soft_texts = {r.text for r in soft}
+            dropped = 0
             for v in a.verdicts:
-                if v.requirement not in soft_texts:
+                if v.requirement not in soft_texts:   # code-decided, or text the model changed: never trusted
+                    dropped += v.requirement not in code
                     continue
                 ev = _norm(v.evidence or "")
                 if v.verdict in ("met", "partial"):
@@ -256,6 +259,8 @@ async def assess(spec: JobSpec, prof: dict, sem: asyncio.Semaphore, run_id: str)
                         v.evidence, v.verdict = None, "unknown"
                         flags.append("unverified evidence removed")
                 verdicts.append(v)
+            if dropped:
+                flags.append(f"{dropped} AI verdict(s) ignored: requirement text didn't match the job order")
     for cv in code.values():   # surface code-detected license risks as flags too
         if cv.verdict == "partial" and "another state" in (cv.note or ""):
             flags.append(cv.note)
@@ -279,9 +284,9 @@ async def run_match(job_order_id: int, user_id: int | None = None) -> str:
         # A run 'running' for longer than STALE_RUN_MIN is dead: mark it failed so the unique index
         # (migration 007) only ever collides with a live run.
         await conn.execute(
-            "UPDATE match_runs SET status='failed', error='timed out; please run matching again', finished_at=now() "
+            "UPDATE match_runs SET status='failed', error=%s, finished_at=now() "
             "WHERE job_order_id=%s AND status='running' AND started_at <= now() - make_interval(mins => %s)",
-            (job_order_id, STALE_RUN_MIN))
+            (TIMED_OUT, job_order_id, STALE_RUN_MIN))
     run_id = f"m-{uuid.uuid4().hex[:10]}"
     steps = hard_filters(spec)
     relaxed: list[str] = []
@@ -324,6 +329,10 @@ async def _finish(run_id: str, job_order_id: int, spec: JobSpec, f: Filters) -> 
         rank = {pid: i + 1 for i, pid in enumerate(ids)}
         async with pool().connection() as conn:
             async with conn.transaction():
+                cur = await conn.execute("SELECT status FROM match_runs WHERE run_id=%s FOR UPDATE", (run_id,))
+                row = await cur.fetchone()
+                if not row or row[0] != "running":   # swept as timed out meanwhile: keep that result final
+                    return
                 for r in ok:
                     await conn.execute(
                         """INSERT INTO matches (job_order_id, run_id, person_id, resume_file_id, score, recommendation,

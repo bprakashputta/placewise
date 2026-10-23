@@ -1,13 +1,16 @@
 """Conversational Ask (ADR 018): route each chat message before any search.
 
     message → route (keyword shortcut, else Claude Haiku) →
-        greeting / help / off_topic → instant reply written by code (no search, no Sonnet)
+        greeting / off_topic → a short reply from the router (Haiku), grounded in today's activity
+        keyword greetings / help / gibberish → a reply written by code (free, instant)
         search    → RAG graph on the standalone question
         follow_up → RAG graph restricted to the candidates shown last (if the router says so)
         job_order → RAG graph with a plan built from the job order's structured requirements
 
-Replies for greetings are built by code from live data (shortlists to review, job orders with no
-run yet, new resumes today), so they are free, instant and can't make things up.
+Keyword greetings ("hi", "thanks") get code-built replies from live data (shortlists to review, job
+orders with no run yet, new resumes today): free and instant. Small talk the model routes ("how are
+you doing?") gets Haiku's short reply, which may only use the facts in TODAY'S ACTIVITY passed to it
+(prompt ask_route v2). Neither path runs a search.
 """
 from __future__ import annotations
 

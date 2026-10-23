@@ -148,3 +148,13 @@ def test_smart_search_respects_the_spend_cap(load_app, monkeypatch):
         assert client.get("/api/search", params={"q": "drainage engineer"}).status_code == 429
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_verdicts_with_changed_requirement_text_are_flagged_not_silently_dropped(monkeypatch):
+    out = _run_assess(monkeypatch, [
+        RequirementVerdict(requirement="HEC-RAS modelling experience", verdict="met",    # text changed by the model
+                           evidence="Built HEC-RAS 2D models for the Brays Bayou channel"),
+    ])
+    assert _v(out, "Texas PE license")["verdict"] == "met"
+    assert not any(v["requirement"] == "HEC-RAS modelling experience" for v in out["verdicts"])
+    assert "1 AI verdict(s) ignored: requirement text didn't match the job order" in out["flags"]

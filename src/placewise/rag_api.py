@@ -21,6 +21,7 @@ def clean_excerpt(content: str, n: int = 260) -> str:
 
 class AskBody(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
+    filters: Filters | None = None   # optional: override the filters the model would infer
 
     @field_validator("question")
     @classmethod
@@ -28,7 +29,6 @@ class AskBody(BaseModel):
         if len(v.strip()) < 3:   # whitespace-only questions must never reach the paid model
             raise ValueError("question is empty")
         return v.strip()
-    filters: Filters | None = None   # optional: override the filters the model would infer
 
 
 @router.post("/ask")

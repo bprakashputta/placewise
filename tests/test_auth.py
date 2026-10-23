@@ -75,8 +75,10 @@ def login(c, u, p):
 
 
 def test_password_hash_roundtrip():
-    h = auth.hash_password("s3cret")
-    assert h.startswith("$argon2") and auth.verify_password("s3cret", h)
+    import secrets
+    pw = secrets.token_urlsafe(12)   # generated per run: no fixed password string in the repo
+    h = auth.hash_password(pw)
+    assert h.startswith("$argon2") and auth.verify_password(pw, h)
     assert not auth.verify_password("wrong", h)
     assert not auth.verify_password("x", "not-a-hash")
 

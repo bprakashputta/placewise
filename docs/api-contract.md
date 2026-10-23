@@ -14,6 +14,13 @@ calling an admin-only route gets **403**.
 
 Roles: `admin` (everything) and `recruiter` (everything except admin-only routes, marked 🔒).
 
+Known tradeoffs (demo scope):
+- **Login limits:** 5 failed attempts per minute per client IP and per username. The per-username limit stops
+  password guessing across many IPs, but it also means anyone can lock an account (e.g. `admin`) out for a
+  minute with 5 bad attempts.
+- **Logout** deletes the cookie in the browser. The signed session token itself stays valid until it expires
+  (12 h); there is no server-side session list to revoke it. A session version per user would fix this.
+
 ## Dashboard
 `GET /api/stats` → `{"candidates": int, "needs_attention": int, "files_processed": int,
 "ingest_jobs": {"done": n, "queued": n, ...}, "by_quality": {"polished": n, ...},
