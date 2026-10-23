@@ -63,26 +63,26 @@ export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null;
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-6"
          onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-label={`Resume: ${target.title}`}
-           className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-neutral-900"
+           className="flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-popover text-popover-foreground shadow-2xl ring-1 ring-foreground/10"
            onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+        <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
           <div className="min-w-0">
             <p className="truncate font-medium">{target.title}</p>
-            {target.subtitle && <p className="truncate text-xs text-neutral-500">{target.subtitle}</p>}
+            {target.subtitle && <p className="truncate text-xs text-muted-foreground">{target.subtitle}</p>}
           </div>
           <div className="flex shrink-0 gap-2">
             <a href={target.downloadUrl} download
-               className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700">
+               className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90">
               Download
             </a>
             <button ref={closeRef} onClick={onClose}
-                    className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800">
+                    className="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-muted">
               Close
             </button>
           </div>
         </div>
         {load.state === "loading" && (
-          <div className="flex flex-1 items-center justify-center text-sm text-neutral-500">Loading resume…</div>
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading resume…</div>
         )}
         {load.state === "error" && (
           <div className="flex flex-1 items-center justify-center p-8">

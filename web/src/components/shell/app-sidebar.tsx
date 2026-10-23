@@ -1,7 +1,9 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useUser } from "@/components/auth/user-provider";
 import { LogoMark } from "@/components/logo";
 import {
   Sidebar,
@@ -52,8 +54,25 @@ function NavList({ items, pathname }: { items: NavItem[]; pathname: string }) {
   );
 }
 
+// usePathname is runtime URL data: with Cache Components it must sit under a Suspense boundary
+// (dynamic routes like /candidates/[id] otherwise block prerendering). The fallback is the same
+// list with nothing highlighted.
+function ActiveNavList({ items }: { items: NavItem[] }) {
+  return <NavList items={items} pathname={usePathname()} />;
+}
+
+function Nav({ items }: { items: NavItem[] }) {
+  return (
+    <Suspense fallback={<NavList items={items} pathname="" />}>
+      <ActiveNavList items={items} />
+    </Suspense>
+  );
+}
+
 export function AppSidebar() {
-  const pathname = usePathname();
+  const { user } = useUser();
+  // Recruiters never see admin pages; hidden until the user loads so it never flashes in.
+  const showAdmin = user?.role === "admin";
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-14 justify-center border-b border-sidebar-border px-2 group-data-[collapsible=icon]:px-2">
@@ -72,16 +91,20 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
-            <NavList items={MAIN_NAV} pathname={pathname} />
+            <Nav items={MAIN_NAV} />
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarSeparator className="mx-0 w-full" />
-        <SidebarGroup>
-          <SidebarGroupLabel>Admin</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <NavList items={ADMIN_NAV} pathname={pathname} />
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {showAdmin && (
+          <>
+            <SidebarSeparator className="mx-0 w-full" />
+            <SidebarGroup>
+              <SidebarGroupLabel>Admin</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <Nav items={ADMIN_NAV} />
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
       </SidebarContent>
       <SidebarFooter className="group-data-[collapsible=icon]:hidden">
         <p className="px-2 pb-1 text-xs text-muted-foreground">Synthetic demo data only</p>

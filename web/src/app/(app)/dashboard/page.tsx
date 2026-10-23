@@ -1,18 +1,10 @@
 import type { Metadata } from "next";
-import { BriefcaseBusiness, CircleDollarSign, ClipboardCheck, FileUp, ListChecks, Send, Users } from "lucide-react";
-import { PageHeader } from "@/components/page-header";
+import { BriefcaseBusiness, ClipboardCheck, FileUp, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardView } from "./dashboard-view";
 
 export const metadata: Metadata = { title: "Dashboard" };
-
-// Values show "–" until the ingest and match blocks provide real numbers. No fake data.
-const STATS = [
-  { label: "Candidates", caption: "Profiles built from ingested resumes", icon: Users },
-  { label: "Open job orders", caption: "Searches your team is working", icon: BriefcaseBusiness },
-  { label: "Shortlists awaiting review", caption: "Ranked candidates ready for a recruiter", icon: ListChecks },
-  { label: "AI spend today", caption: "Model and embedding cost, in USD", icon: CircleDollarSign },
-];
 
 const STEPS = [
   { title: "Ingest resumes", body: "Resumes become structured, searchable profiles with verified credentials.", icon: FileUp },
@@ -23,39 +15,14 @@ const STEPS = [
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Welcome, Demo Recruiter"
-        description="Here's where your candidate pool, job orders and approvals come together."
-      />
-
-      <section aria-label="Key numbers" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {STATS.map((s) => (
-          <Card key={s.label} className="gap-2">
-            <CardHeader>
-              <CardDescription className="flex items-center justify-between gap-2">
-                <span>{s.label}</span>
-                <s.icon className="size-4 text-muted-foreground" aria-hidden="true" />
-              </CardDescription>
-              <CardTitle className="text-3xl font-semibold tabular-nums">
-                <span aria-hidden="true">–</span>
-                <span className="sr-only">No data yet</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">{s.caption}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </section>
-
-      <Card>
+    <DashboardView>
+      <Card className="h-full">
         <CardHeader>
           <CardTitle>Getting started</CardTitle>
           <CardDescription>The Placewise pipeline, from resume to approved outreach.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ol className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <ol className="grid gap-3 sm:grid-cols-2">
             {STEPS.map((step, i) => (
               <li key={step.title} className="relative flex flex-col gap-3 rounded-lg border bg-muted/30 p-4">
                 <div className="flex items-center justify-between">
@@ -75,6 +42,6 @@ export default function DashboardPage() {
           </ol>
         </CardContent>
       </Card>
-    </div>
+    </DashboardView>
   );
 }
