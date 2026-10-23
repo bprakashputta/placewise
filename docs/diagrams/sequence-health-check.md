@@ -1,6 +1,6 @@
 # Sequence: System status (health check)
 
-What happens when the System status page loads or the user clicks **Recheck**. Code: `web/src/app/system-status.tsx`, `web/next.config.ts`, `src/placewise/main.py`, `src/placewise/health.py`.
+What happens when the System status page loads or the user clicks **Recheck**. Code: `web/src/app/(app)/admin/system/system-status-view.tsx` (Admin → System status), `web/next.config.ts`, `src/placewise/main.py`, `src/placewise/health.py`.
 
 ![Health-check sequence: cache, LangSmith call, db check, 200 or 503.](sequence-health-check.svg)
 

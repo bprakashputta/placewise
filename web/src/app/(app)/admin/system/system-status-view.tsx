@@ -26,10 +26,23 @@ const HEADER = {
   description: "Live check that every service the portal depends on is connected.",
 };
 
-/** Admin-only, like the other admin pages. */
+/** Admin-only, like the other admin pages: a skeleton until the user is known, then recruiters get the
+ * "Admins only" state without any request being made. */
 export function SystemStatusView() {
   const { user } = useUser();
-  if (user && user.role !== "admin") {
+  if (!user) {
+    return (
+      <div className="space-y-6">
+        <PageHeader {...HEADER} />
+        <div className="grid gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Skeleton key={i} className="h-32 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (user.role !== "admin") {
     return (
       <div className="space-y-6">
         <PageHeader {...HEADER} />
@@ -50,7 +63,8 @@ function StatusChecks() {
     setLoading(true);
     setError(null);
     try {
-      // A 503 still returns JSON saying which dependency is down.
+      // A 503 still returns JSON saying which dependency is down. If the api is unreachable, the Next
+      // rewrite returns an HTML 500, so res.json() throws and the catch below shows the message.
       const res = await fetch("/api/health", { cache: "no-store" });
       setHealth((await res.json()) as Health);
     } catch {
