@@ -14,6 +14,7 @@ import time
 import uuid
 import warnings
 
+import psycopg
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from psycopg.rows import dict_row
@@ -291,8 +292,11 @@ async def run_match(job_order_id: int, user_id: int | None = None) -> str:
         if await _count(f) >= MIN_POOL:
             break
     async with pool().connection() as conn:
-        await conn.execute("INSERT INTO match_runs (run_id, job_order_id, filters, relaxed, created_by) "
-                           "VALUES (%s,%s,%s,%s,%s)", (run_id, job_order_id, chosen.model_dump_json(), relaxed, user_id))
+        try:   # the unique index (migration 007) is the real guard against two concurrent runs
+            await conn.execute("INSERT INTO match_runs (run_id, job_order_id, filters, relaxed, created_by) "
+                               "VALUES (%s,%s,%s,%s,%s)", (run_id, job_order_id, chosen.model_dump_json(), relaxed, user_id))
+        except psycopg.errors.UniqueViolation:
+            raise RunInProgress("a match is already running for this job order")
     task = asyncio.create_task(_finish(run_id, job_order_id, spec, chosen))
     _tasks.add(task)                      # keep a reference so the task isn't garbage-collected
     task.add_done_callback(_tasks.discard)
@@ -303,7 +307,7 @@ async def _finish(run_id: str, job_order_id: int, spec: JobSpec, f: Filters) -> 
     try:
         query = spec.title + ". " + "; ".join(r.text for r in spec.requirements)
         hits = await hybrid(query, f, k=80)
-        hits = await rerank(query, hits[:60], top_k=50)
+        hits = await rerank(query, hits[:60], top_k=50, run_ref=run_id)
         groups = group_by_candidate(hits, "rerank")[:TOP_N]
         ids = [g.person_id for g in groups]
         async with pool().connection() as conn:

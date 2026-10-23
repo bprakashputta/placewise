@@ -25,7 +25,11 @@ class Settings(BaseSettings):
 
     daily_llm_spend_cap_usd: float = 10.0
     cookie_secure: bool = False   # True when served over HTTPS (the public tunnel link)
-    trust_cloudflare_ip: bool = False   # True only when traffic arrives through the Cloudflare tunnel
+    trust_cloudflare_ip: bool = False
+    # Voyage prices per million tokens, for the AI cost log. 0 while the account uses Voyage's free
+    # token allowance; set the paid rates here when that changes.
+    voyage_embed_usd_per_mtok: float = 0.0
+    voyage_rerank_usd_per_mtok: float = 0.0   # True only when traffic arrives through the Cloudflare tunnel
 
     db_pool_min: int = 1
     db_pool_max: int = 10

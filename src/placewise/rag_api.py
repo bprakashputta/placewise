@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 from .ingest.spend import SpendCapReached
+from .ingest.spend import check as spend_check
 from .rag.graph import ask as run_ask
 from .rag.graph import _profiles
 from .rag.rerank import rerank
@@ -41,7 +42,12 @@ async def ask(body: AskBody) -> dict:
 @router.get("/search")
 async def search(q: str = Query(min_length=2, max_length=300), discipline: str | None = None, metro: str | None = None, license: str | None = None,
                  min_years: float | None = None, limit: int = 20) -> dict:
-    """Semantic + keyword candidate search with optional hard filters (no LLM call, ~0.5 s)."""
+    """Semantic + keyword candidate search with optional hard filters (no LLM call, ~0.5 s).
+    Uses Voyage (embedding + rerank), so it respects the daily AI spend cap like every other AI call."""
+    try:
+        await spend_check()
+    except SpendCapReached as e:
+        raise HTTPException(429, str(e))
     f = Filters(discipline=discipline, metro=metro, license_codes=[license] if license else [], min_years=min_years)
     hits = await hybrid(q, f, k=60)
     hits = await rerank(q, hits[:60], top_k=40)

@@ -10,7 +10,9 @@ satisfied by a resume that merely mentions Texas and engineering.
 """
 from __future__ import annotations
 
+import asyncio
 import re
+import time
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -18,7 +20,9 @@ from langchain_voyageai import VoyageAIEmbeddings
 from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
+from ..config import get_settings
 from ..db import pool
+from ..ingest.spend import log_call
 
 EMBED_MODEL = "voyage-4-large"
 RRF_K = 60
@@ -92,8 +96,19 @@ def _or_query(text: str) -> str:
     return " OR ".join(words) if words else text
 
 
+async def embed_query(query: str, run_ref: str = "search") -> np.ndarray:
+    """Query embedding via LangChain's VoyageAIEmbeddings, bounded by a timeout and logged in llm_calls.
+    LangChain doesn't return token counts, so tokens are estimated (about 4 characters per token)."""
+    t0 = time.perf_counter()
+    vec = await asyncio.wait_for(_embedder_().aembed_query(query), timeout=15)
+    est = max(1, len(query) // 4)
+    await log_call(run_ref, "voyage.embed_query", EMBED_MODEL, 0, est, 0, int((time.perf_counter() - t0) * 1000),
+                   est / 1e6 * get_settings().voyage_embed_usd_per_mtok, "ok")
+    return np.array(vec, dtype=np.float32)
+
+
 async def vector_search(query: str, f: Filters, k: int = 50, person_ids: list[int] | None = None) -> list[Hit]:
-    vec = np.array(await _embedder_().aembed_query(query), dtype=np.float32)
+    vec = await embed_query(query)
     where, args = _where(f, person_ids)
     async with pool().connection() as conn:
         async with conn.transaction():

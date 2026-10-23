@@ -30,6 +30,8 @@ const STEP_LABELS: Record<string, string> = {
   "rag.answer": "Ask: write cited answer",
   "rag.understand": "Ask: understand question",
   "ask.route": "Ask: route chat message",
+  "voyage.embed_query": "Search: embed the query (Voyage)",
+  "voyage.rerank": "Search: rerank results (Voyage)",
   "ingest.extract": "Resume extraction",
   "match.score": "Matching: score candidate",
   "job_order.extract": "Job order: structure notes",

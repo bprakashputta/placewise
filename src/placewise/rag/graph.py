@@ -84,7 +84,7 @@ async def n_retrieve(s: AskState) -> AskState:
 async def n_rerank(s: AskState) -> AskState:
     t0 = time.perf_counter()
     q = QueryPlan.model_validate(s["plan"]).search_query or s["question"]
-    hits = await rerank(q, s["hits"][:60], top_k=40) if s["hits"] else []
+    hits = await rerank(q, s["hits"][:60], top_k=40, run_ref="ask") if s["hits"] else []
     groups = group_by_candidate(hits, "rerank", per_person=CHUNKS_PER_CANDIDATE)
     names = {pid: p["full_name"] for pid, p in (await _profiles([g.person_id for g in groups[:20]])).items()}
     return {"hits": hits, "candidates": groups[:20], "names": names,
