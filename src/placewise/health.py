@@ -14,6 +14,7 @@ from .db import pool
 _LANGSMITH_TTL_S = 60
 _LANGSMITH_FAIL_TTL_S = 15   # retry sooner after a failure, but not on every poll
 _langsmith_cache: tuple[float, float, dict] | None = None  # (checked_at, ttl, result)
+_langsmith_lock = asyncio.Lock()  # one check at a time; concurrent callers share its result
 
 
 async def check_db() -> dict:
@@ -43,9 +44,15 @@ def _check_langsmith_sync() -> dict:
 
 async def check_langsmith() -> dict:
     global _langsmith_cache
-    now = time.monotonic()
-    if _langsmith_cache and now - _langsmith_cache[0] < _langsmith_cache[1]:
-        return _langsmith_cache[2]
+    async with _langsmith_lock:
+        now = time.monotonic()
+        if _langsmith_cache and now - _langsmith_cache[0] < _langsmith_cache[1]:
+            return _langsmith_cache[2]
+        return await _refresh_langsmith(now)
+
+
+async def _refresh_langsmith(now: float) -> dict:
+    global _langsmith_cache
     try:
         result = await asyncio.wait_for(asyncio.to_thread(_check_langsmith_sync), timeout=10)
     except asyncio.TimeoutError:
