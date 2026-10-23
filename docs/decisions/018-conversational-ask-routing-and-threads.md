@@ -1,6 +1,6 @@
 # 018: Conversational Ask: route messages first, keep separate conversations
 
-- **Status:** proposed (Block 7, awaiting owner approval to build)
+- **Status:** accepted and built (owner approved 2026-10-23: "fix the chat issues"); backend measured, UI in progress
 - **Date:** 2026-10-23
 
 ## Context
@@ -9,7 +9,7 @@ The Ask graph (Block 5) is a straight line: understand → retrieve → rerank �
 The owner asked whether recruiters should have one endless chat, or chats that close when the work is done (a role is filled, profiles are submitted).
 
 ## Decision
-1. **Route each message before any search.** A new first LangGraph node, `route` (Claude Haiku 5.5, structured output, under 1 s, under $0.001), labels each message:
+1. **Route each message before any search.** A free keyword shortcut answers obvious one-liners ("hi", "thanks", "help"). Everything else goes to `route` (Claude Haiku 5.5, structured output, prompt `ask_route` v1, under 1 s, under $0.001), which labels the message and, in the same call, rewrites search requests and follow-ups into a standalone question:
 
    | Label | Example | Next step |
    |---|---|---|
@@ -20,10 +20,11 @@ The owner asked whether recruiters should have one endless chat, or chats that c
    | `job_order` | "who fits JO-03?" | Use that job order's structured requirements as the plan |
    | `off_topic` | "what's the weather", "list all emails" | Polite redirect, no search |
 
-   A LangGraph conditional edge (`add_conditional_edges`) sends only `search`, `follow_up` and `job_order` into retrieval.
+   Only `search`, `follow_up` and `job_order` run the RAG graph (`src/placewise/rag/converse.py`). A follow-up with scope "previous candidates" searches only the candidates the last answer cited; if none match, the reply says so and offers a one-click whole-pool search. If the router fails, the message is treated as a search, so a real question is never lost.
 
 2. **Separate conversations, optionally tied to a job order.** This matches how ChatGPT and Claude work.
-   - New table `conversations` (id, user_id, title, job_order_id nullable, status active|closed, created_at, last_message_at). Messages and graph state are stored by LangGraph's **Postgres checkpointer**, keyed by conversation id.
+   - Tables `conversations` (id, user_id, title, job_order_id nullable, created_at, last_message_at) and `conversation_messages` (role, kind, content, the full answer JSON, suggestions, the candidate ids discussed, cost), migration 006. `active` is computed: a message in the last 24 h and the job order (if any) still open.
+   - **Changed while building:** memory lives in `conversation_messages`, not LangGraph's Postgres checkpointer. The UI needs that table anyway to list and reopen chats, and each turn is a short graph run with no pause or resume (no `interrupt`), so a checkpointer would only store the same messages a second time. The checkpointer stays planned for the match graph's approval `interrupt`.
    - Sidebar: "New chat" plus recent conversations grouped by Today / Yesterday / Earlier, with a job-order badge. A conversation is closed automatically when its job order is filled or after 24 hours idle; closed ones stay readable, and sending a new message reopens one.
    - The job order page gets an **"Ask about this role"** button that opens a conversation tied to that job order.
    - Only the last few turns plus a short summary go back to the model, so follow-ups stay fast and cheap.
@@ -33,6 +34,10 @@ The owner asked whether recruiters should have one endless chat, or chats that c
    - 👍/👎 on each answer, linked to its LangSmith trace.
    - Outcome signal: a candidate surfaced in a conversation and later approved for submittal counts as a positive label.
    - A prompt change ships only when the test scores hold or improve.
+
+## Measured (2026-10-23)
+- Routing eval (`python -m placewise.evals.ask_routing`, 30 labeled messages incl. mixed "hi + request", follow-ups with history, job orders, off-topic and injection attempts): **30/30 correct**, $0.005.
+- Live: greeting 0.02 s and $0 (keyword shortcut); off-topic 0.8–1.7 s; search ~10–12 s; job-order chat ~14 s; follow-up with no match 2.3 s (checked against the database: the 8 cited candidates top out at 9.5 years, so "none have 10+" was correct).
 
 ## Alternatives considered
 - **One endless chat per recruiter:** simplest, but filters and candidates from earlier topics leak into new questions, each follow-up resends a growing history (slower, costlier, less accurate), and there's no per-role record.

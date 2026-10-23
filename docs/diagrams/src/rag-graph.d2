@@ -29,7 +29,7 @@ retrieve: "retrieve (our SQL)\n" {
 rerank: "rerank\nVoyage rerank-3\ntop 50 → 30\ngroup by candidate" {class: ai}
 answer: "answer\nClaude Sonnet 5.5\nfrom resume text +\nverified facts only" {class: ai}
 check: "citation check (code)\nquote must exist in\nthe cited section" {class: code}
-out: "Answer + citations\n+ candidate cards\n~14 s · ~$0.03" {class: end}
+out: "Answer + citations\n+ candidate cards\nabout 14 s, 3 cents" {class: end}
 
 db: "Postgres\ncurrent_chunks\nprofiles" {class: data}
 

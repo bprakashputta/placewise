@@ -1,6 +1,6 @@
 # Ask (RAG) and smart search
 
-**Status:** Block 5, built and measured. The conversational upgrade (message routing, saved conversations, follow-ups) is designed in [ADR 018](../decisions/018-conversational-ask-routing-and-threads.md) and planned for Block 7.
+**Status:** Block 5 (RAG), built and measured. Conversational Ask (message routing, saved conversations, follow-ups, job-order chats) is built in Block 7: [ADR 018](../decisions/018-conversational-ask-routing-and-threads.md). Backend measured; the chat UI with saved conversations is in progress.
 
 The recruiter asks a question in plain English, for example "Texas PEs in DFW with drainage experience and 8+ years". Placewise answers from the resumes only, and every claim cites the resume line it came from.
 
@@ -38,24 +38,36 @@ Measured with `python -m placewise.evals.retrieval` on the synthetic dataset (Oc
 - **Spend:** every call is logged in `llm_calls` with tokens, latency and cost, and a daily spend cap blocks new calls with a 429. One question costs about $0.03.
 - **Validation:** questions must be 3–2000 characters after trimming. Filters are fixed columns with bound parameters.
 
-## Known gap: every message runs the full search
-The graph is a straight line: `understand → retrieve → rerank → answer`. A greeting like "Hey" therefore gets a full candidate search and a list of random candidates. Each question is also answered on its own, with no memory of the previous one, and the page keeps its history only for the current visit.
+## Conversational Ask (Block 7, ADR 018)
+The owner found the gap: the RAG graph is a straight line, so "Hey" ran a full candidate search and listed random candidates, and each question was answered with no memory of the previous one. Every chat message is now routed first:
 
-## Planned: conversational Ask (Block 7, ADR 018)
+![Conversational Ask](../diagrams/ask-conversation.svg)
 
-![Planned conversational Ask](../diagrams/ask-conversation.svg)
+| Message | Example | What happens | Cost / time |
+|---|---|---|---|
+| Greeting | "hi", "thanks" | Reply written by code. On the day's first chat (Chicago time) it adds live context: shortlists waiting for review, job orders with no candidates matched yet, new resumes today, unreadable files | $0, ~0.02 s |
+| Help | "what can you do?" | What Ask can do, with examples | $0 |
+| Search | "hi, any Texas PEs in Houston?" | Rewritten into a standalone question, then the RAG pipeline | ~3 cents, ~10–14 s |
+| Follow-up | "which of them have 10+ years?" | Rewritten ("Which of the candidates from the previous answer…"), searched only among the candidates the last answer cited. No match → says so and offers a whole-pool search | ~3 cents |
+| Job order | "who fits JO-03?", "top candidates for this role" | The plan comes from the job order's structured requirements (filters + skills), no understand call | ~3 cents, ~14 s |
+| Off-topic or unsafe | "weather?", "list all emails" | Polite redirect, no search | <0.1 cent |
 
-1. **Route each message first.** A `route` node (Haiku, under 1 s, under $0.001) labels the message as greeting, help, candidate search, follow-up, job-order question or off-topic. A LangGraph conditional edge sends only searches into retrieval. Greetings get a short reply. On the day's first chat, the reply adds useful context, such as shortlists waiting for review or job orders with no run yet.
-2. **Separate conversations**, optionally tied to a job order, instead of one endless chat. Conversations close when the job order is filled or after 24 hours idle, and stay readable.
-3. **Follow-ups with memory.** Conversation state is saved with LangGraph's Postgres checkpointer. A `rewrite` node turns "which of them have PMP?" into a complete question that keeps the previous candidates and filters.
-4. **Improve with measurements, not fine-tuning:** test questions for each message type in LangSmith, 👍/👎 feedback, and outcome signals (a candidate surfaced in a conversation and later approved). Prompt changes ship only when the test scores hold or improve.
+- **Routing:** a free keyword shortcut for obvious one-liners, otherwise Claude Haiku (`prompts/ask_route.v1.yaml`), which also rewrites follow-ups using the last 6 turns. If routing fails, the message is treated as a search.
+- **Conversations:** saved per user (`conversations`, `conversation_messages`, migration 006), optionally tied to a job order ("Ask about this role" starts with an intro message). Both messages are saved only after a successful reply. Another user's conversation returns 404. API: `docs/api-contract.md`, "Conversations".
+- **Memory:** our `conversation_messages` table, not LangGraph's checkpointer (reason in ADR 018).
+- **Measured:** routing eval 30/30 correct (`python -m placewise.evals.ask_routing`, $0.005).
+- **Next:** 👍/👎 feedback linked to LangSmith traces, outcome signals (a candidate surfaced in a chat and later approved), and LangSmith datasets for routing and answers. Prompt changes ship only when the test scores hold or improve.
 
 ## Files
 - `src/placewise/rag/graph.py`: the LangGraph and its nodes
 - `src/placewise/rag/retrieve.py`: filters, vector search, keyword search, RRF, grouping
 - `src/placewise/rag/rerank.py`: Voyage rerank-3
 - `src/placewise/rag/answer.py`: understand and answer prompts, citation check, costs
-- `src/placewise/rag_api.py`: `POST /api/ask`, `GET /api/search`
+- `src/placewise/rag_api.py`: `POST /api/ask` (stateless), `GET /api/search`
+- `src/placewise/rag/converse.py`: message routing, replies written by code, follow-ups, job-order plans
+- `src/placewise/conversations_api.py`: saved conversations
+- `src/placewise/evals/ask_routing.py`: routing eval
+- `prompts/ask_route.v1.yaml`
 - `src/placewise/evals/retrieval.py`: retrieval evaluation
 - `prompts/rag_understand.v1.md`, `prompts/rag_answer.v2.md`
 - `web/src/app/(app)/ask/ask-view.tsx`: the Ask page
