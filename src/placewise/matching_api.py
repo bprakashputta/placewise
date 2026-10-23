@@ -109,7 +109,7 @@ async def matches(job_id: int, run_id: str | None = None) -> dict:
                 run = {**run, "status": "failed", "error": "timed out; please run matching again"}
         await cur.execute(
             """SELECT m.id, m.person_id, m.resume_file_id, m.score, m.recommendation, m.verdicts, m.flags, m.summary,
-                      m.retrieval_rank, m.status, c.full_name, c.headline, c.metro, c.years_experience,
+                      m.retrieval_rank, m.status, m.decided_at, c.full_name, c.headline, c.metro, c.years_experience,
                       c.license_codes, c.quality
                FROM matches m JOIN current_candidates c ON c.person_id = m.person_id
                WHERE m.run_id = %s ORDER BY m.score DESC, m.retrieval_rank""", (run["run_id"],))

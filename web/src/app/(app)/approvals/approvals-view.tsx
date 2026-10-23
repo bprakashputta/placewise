@@ -20,7 +20,7 @@ const COLUMNS = [
   { label: "Candidate" },
   { label: "Job order", className: "hidden sm:table-cell" },
   { label: "Score", className: "text-right" },
-  { label: "Shortlisted", className: "hidden md:table-cell" },
+  { label: "Approved", className: "hidden md:table-cell" },
 ];
 
 /**
@@ -48,7 +48,7 @@ function useApproved() {
         );
         const items = results
           .flatMap((x) =>
-            x ? x.r.matches.filter((m) => m.status === "approved").map((m) => ({ match: m, job: x.job, shortlistedAt: x.r.run?.finished_at ?? null })) : [],
+            x ? x.r.matches.filter((m) => m.status === "approved").map((m) => ({ match: m, job: x.job, shortlistedAt: (m as { decided_at?: string | null }).decided_at ?? x.r.run?.finished_at ?? null })) : [],
           )
           .sort((a, b) => (b.shortlistedAt ?? "").localeCompare(a.shortlistedAt ?? "") || b.match.score - a.match.score);
         if (alive) setState({ items });
