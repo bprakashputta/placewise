@@ -52,7 +52,9 @@ async def list_job_orders() -> list[dict]:
                       j.spec->>'discipline' AS discipline,
                       r.run_id AS last_run_id, r.status AS last_run_status, r.finished_at AS last_run_at,
                       (SELECT count(*) FROM matches m WHERE m.run_id = r.run_id AND m.recommendation = 'submit')
-                          AS submit_count
+                          AS submit_count,
+                      (SELECT count(*) FROM matches m WHERE m.run_id = r.run_id AND m.status = 'proposed'
+                          AND m.recommendation IN ('submit','consider')) AS pending_review
                FROM job_orders j
                LEFT JOIN LATERAL (SELECT * FROM match_runs mr WHERE mr.job_order_id = j.id
                                   ORDER BY started_at DESC LIMIT 1) r ON TRUE

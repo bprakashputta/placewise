@@ -17,7 +17,7 @@ Roles: `admin` (everything) and `recruiter` (everything except admin-only routes
 ## Dashboard
 `GET /api/stats` → `{"candidates": int, "needs_attention": int, "files_processed": int,
 "ingest_jobs": {"done": n, "queued": n, ...}, "by_quality": {"polished": n, ...},
-"ai_spend_today_usd": float, "ai_spend_total_usd": float, "spend_cap_usd": float}`
+"ai_spend_today_usd": float, "ai_spend_total_usd": float, "spend_cap_usd": float, "open_job_orders": int, "shortlists_to_review": int}`
 
 ## Candidates
 | Method | Path | Notes |
@@ -47,13 +47,13 @@ Display rules for the UI:
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/api/ask` | body `{"question": str, "filters"?: {discipline, metro, license_codes[], min_years}}` → `{"question", "answer" (markdown), "citations": [{chunk_id, person_id, resume_file_id, candidate_name, section, quote}], "candidates": [{person_id, full_name, headline, discipline, metro, city, years_experience, license_codes[], quality, score, top_sections[{chunk_id, section, content}]}], "plan": {"filters": {...}, "search_query"}, "dropped_citations": [str], "timings_ms": {understand_ms, retrieve_ms, rerank_ms, answer_ms, total_ms}, "cost_usd"}` · 429 when the daily AI spend cap is reached. Takes ~10–15 s. |
-| GET | `/api/search?q=&discipline=&metro=&license=&min_years=&limit=20` | No LLM, ~0.5 s: `{"query", "items": [{person_id, full_name, headline, discipline, metro, years_experience, license_codes[], quality, score, match}]}` |
+| GET | `/api/search?q=&discipline=&metro=&license=&min_years=&limit=20` | No LLM, ~0.5 s: `{"query", "items": [{person_id, full_name, headline, discipline, metro, city, years_experience, license_codes[], quality, score, match (clean excerpt)}]}` |
 
 ## Job orders + matching (Blocks 4 + 6)
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/api/job-orders` | body `{"notes": str (20–6000 chars)}` → `{id, title, client, raw_notes, spec, status, created_at, cost_usd}` (~8 s). `spec` = `{title, client, city, metro, work_mode, employment_type, salary, discipline, subdiscipline, min_years, requirements[{text, kind, priority: must|nice, key, state, value}], open_questions[]}` |
-| GET | `/api/job-orders` | `[{id, title, client, status, created_at, metro, discipline, last_run_id, last_run_status, last_run_at, submit_count}]` |
+| GET | `/api/job-orders` | `[{id, title, client, status, created_at, metro, discipline, last_run_id, last_run_status, last_run_at, submit_count, pending_review}]` |
 | GET | `/api/job-orders/{id}` | `{id, title, client, raw_notes, spec, status, created_at}` |
 | POST | `/api/job-orders/{id}/match` | starts a background match run → `{run_id, status: "running"}` (takes ~20–40 s) |
 | GET | `/api/job-orders/{id}/matches?run_id=` | latest (or given) run: `{"run": {run_id, status: running|done|failed, filters, relaxed[], candidates, cost_usd, error, started_at, finished_at}, "matches": [{id, person_id, resume_file_id, score (0–100), recommendation: submit|consider|pass, verdicts[{requirement, verdict: met|partial|not_met|unknown, evidence, note}], flags[], summary, retrieval_rank, status: proposed|approved|rejected, full_name, headline, metro, years_experience, license_codes[], quality}]}`. Poll every 2 s while running |

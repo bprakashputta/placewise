@@ -11,6 +11,13 @@ from .rag.retrieve import Filters, group_by_candidate, hybrid
 router = APIRouter(prefix="/api", tags=["rag"])
 
 
+def clean_excerpt(content: str, n: int = 260) -> str:
+    """Strip the '[headline | discipline] section:' context prefix stored with each chunk."""
+    import re
+    text = re.sub(r"^\[[^\]]*\]\s*\w+:\s*", "", content).strip()
+    return text if len(text) <= n else text[:n].rsplit(" ", 1)[0] + "…"
+
+
 class AskBody(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
     filters: Filters | None = None   # optional: override the filters the model would infer
@@ -37,7 +44,7 @@ async def search(q: str, discipline: str | None = None, metro: str | None = None
     for g in groups:
         p = profiles.get(g.person_id)
         if p:
-            items.append({**{k: p[k] for k in ("person_id", "full_name", "headline", "discipline", "metro",
+            items.append({**{k: p[k] for k in ("person_id", "full_name", "headline", "discipline", "metro", "city",
                                                 "years_experience", "license_codes", "quality")},
-                          "score": round(g.score, 4), "match": g.chunks[0].content[:300] if g.chunks else ""})
+                          "score": round(g.score, 4), "match": clean_excerpt(g.chunks[0].content) if g.chunks else ""})
     return {"query": q, "items": items}

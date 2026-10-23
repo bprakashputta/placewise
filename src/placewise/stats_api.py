@@ -22,9 +22,16 @@ async def stats() -> dict:
         today = (await (await one("SELECT COALESCE(sum(cost_usd),0) FROM llm_calls "
                                   "WHERE created_at >= date_trunc('day', now())")).fetchone())[0]
         total = (await (await one("SELECT COALESCE(sum(cost_usd),0) FROM llm_calls")).fetchone())[0]
+        open_jobs = (await (await one("SELECT count(*) FROM job_orders WHERE status='open'")).fetchone())[0]
+        to_review = (await (await one(
+            """SELECT count(DISTINCT m.job_order_id) FROM matches m
+               JOIN (SELECT DISTINCT ON (job_order_id) run_id FROM match_runs WHERE status='done'
+                     ORDER BY job_order_id, started_at DESC) latest ON latest.run_id = m.run_id
+               WHERE m.status = 'proposed' AND m.recommendation IN ('submit','consider')""")).fetchone())[0]
     return {"candidates": cands, "needs_attention": attention, "files_processed": processed, "ingest_jobs": jobs,
             "by_quality": quality, "ai_spend_today_usd": round(float(today), 4),
-            "ai_spend_total_usd": round(float(total), 4), "spend_cap_usd": get_settings().daily_llm_spend_cap_usd}
+            "ai_spend_total_usd": round(float(total), 4), "spend_cap_usd": get_settings().daily_llm_spend_cap_usd,
+            "open_job_orders": open_jobs, "shortlists_to_review": to_review}
 
 
 @router.get("/admin/costs", dependencies=[Depends(require_admin)])
