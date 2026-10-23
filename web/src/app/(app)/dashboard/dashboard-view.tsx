@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CircleAlert, CircleDollarSign, FileCheck2, Users } from "lucide-react";
+import { BriefcaseBusiness, CircleAlert, CircleDollarSign, FileCheck2, ListChecks, Users } from "lucide-react";
 import { useUser } from "@/components/auth/user-provider";
 import { PageHeader } from "@/components/page-header";
 import { qualityStyle } from "@/components/quality-badge";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApi, type Stats } from "@/lib/api";
+import type { JobOrderRow } from "@/lib/job-types";
 import { formatNumber, formatUsd, humanize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -122,6 +123,10 @@ export function DashboardView({ children }: { children: React.ReactNode }) {
   const { user } = useUser();
   const { data: stats, loading, error } = useApi<Stats>("/api/stats");
   const s = error ? undefined : stats;
+  // Until /api/stats has job-order fields, derive them from the job-order list.
+  const jobs = useApi<JobOrderRow[]>("/api/job-orders");
+  const openJobs = jobs.data?.filter((j) => j.status === "open").length;
+  const awaitingReview = jobs.data?.filter((j) => j.last_run_status === "done" && (j.submit_count ?? 0) > 0).length;
   const pct = s && s.spend_cap_usd > 0 ? Math.min(100, (s.ai_spend_today_usd / s.spend_cap_usd) * 100) : 0;
   const firstName = user?.display_name.split(" ")[0];
 
@@ -132,7 +137,7 @@ export function DashboardView({ children }: { children: React.ReactNode }) {
         description="Here's where your candidate pool, job orders and approvals come together."
       />
 
-      <section aria-label="Key numbers" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section aria-label="Key numbers" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard label="Candidates" value={formatNumber(s?.candidates)} caption="Profiles built from ingested resumes" icon={Users} loading={loading} href="/candidates" />
         <StatCard
           label="Needs attention"
@@ -152,6 +157,22 @@ export function DashboardView({ children }: { children: React.ReactNode }) {
           {s && <Progress value={pct} aria-label={`${pct.toFixed(0)}% of the daily spend cap used`} className="h-1.5" />}
         </StatCard>
         <StatCard label="Files processed" value={formatNumber(s?.files_processed)} caption="Resumes read, screened and extracted" icon={FileCheck2} loading={loading} />
+        <StatCard
+          label="Open job orders"
+          value={formatNumber(openJobs)}
+          caption="Searches your team is working"
+          icon={BriefcaseBusiness}
+          loading={jobs.loading && !jobs.data}
+          href="/job-orders"
+        />
+        <StatCard
+          label="Shortlists to review"
+          value={formatNumber(awaitingReview)}
+          caption="Job orders with candidates recommended to submit"
+          icon={ListChecks}
+          loading={jobs.loading && !jobs.data}
+          href="/job-orders"
+        />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-5">
