@@ -440,7 +440,7 @@ function ChatThread({
         </header>
 
         <div className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="@container mx-auto flex min-h-full w-full max-w-[900px] flex-col px-4 pt-6 pb-4 sm:px-6 sm:pt-8">
+          <div className="@container mx-auto flex min-h-full w-full max-w-[760px] flex-col px-4 pt-6 pb-4 sm:px-6 sm:pt-8">
             {body}
             <div ref={endRef} />
           </div>
@@ -467,7 +467,7 @@ function ChatThread({
       </section>
 
       {/* ≥ xl: docked candidates column. */}
-      <aside className="hidden w-[380px] shrink-0 border-l bg-muted/30 xl:block dark:bg-muted/10" aria-label="Candidates">
+      <aside className="hidden w-[400px] shrink-0 border-l bg-muted/30 xl:block 2xl:w-[640px] dark:bg-muted/10" aria-label="Candidates">
         {panel()}
       </aside>
 

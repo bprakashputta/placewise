@@ -58,7 +58,7 @@ export function CandidatesPanel({
         )}
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="@container relative min-h-0 flex-1 overflow-y-auto p-3">
         {candidates.length === 0 ? (
           <div className="flex h-full min-h-48 flex-col items-center justify-center gap-3 px-6 text-center">
             <span className="flex size-11 items-center justify-center rounded-xl bg-brand-soft text-brand">
@@ -109,7 +109,7 @@ function Group({ label, count, children }: { label: string; count: number; child
       <h3 className="mb-2 flex items-center gap-1.5 px-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
         {label} <span className="tabular-nums">· {count}</span>
       </h3>
-      <ul className="space-y-2">{children}</ul>
+      <ul className="grid grid-cols-1 items-start gap-2 @[560px]:grid-cols-2">{children}</ul>
     </section>
   );
 }
@@ -165,7 +165,7 @@ function CandidateCard({
     <li
       className={cn(
         "rounded-xl border bg-card shadow-xs transition-[border-color,box-shadow]",
-        expanded ? "border-brand/40 shadow-sm ring-1 ring-brand/15" : "hover:border-foreground/15",
+        expanded ? "border-brand/40 shadow-sm ring-1 ring-brand/15 @[560px]:col-span-2" : "hover:border-foreground/15",
       )}
     >
       <button

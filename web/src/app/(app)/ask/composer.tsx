@@ -27,7 +27,7 @@ export function Composer({
   notice?: React.ReactNode;
 }) {
   return (
-    <div className="relative mx-auto w-full max-w-[900px] px-4 pb-3 before:pointer-events-none before:absolute before:inset-x-0 before:-top-6 before:h-6 before:bg-gradient-to-t before:from-background before:to-transparent sm:px-6 sm:pb-4">
+    <div className="relative mx-auto w-full max-w-[760px] px-4 pb-3 before:pointer-events-none before:absolute before:inset-x-0 before:-top-6 before:h-6 before:bg-gradient-to-t before:from-background before:to-transparent sm:px-6 sm:pb-4">
       {suggestions.length > 0 && (
         <ul className="mb-2.5 flex flex-wrap gap-1.5" aria-label="Suggested follow-ups">
           {suggestions.map((s) => (
