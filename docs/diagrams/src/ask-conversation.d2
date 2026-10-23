@@ -1,0 +1,42 @@
+# Conversational Ask (ADR 018, Block 7): route first, search only when needed, remember the conversation.
+vars: {d2-config: {theme-id: 0; pad: 40}}
+direction: right
+
+classes: {
+  node: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; border-radius: 10; font-color: "#1E1B4B"; stroke-width: 2}}
+  ai: {style: {fill: "#FFF7ED"; stroke: "#EA580C"; border-radius: 10; font-color: "#7C2D12"; stroke-width: 2}}
+  code: {style: {fill: "#ECFDF5"; stroke: "#059669"; border-radius: 10; font-color: "#064E3B"; stroke-width: 2}}
+  end: {shape: oval; style: {fill: "#F1F5F9"; stroke: "#64748B"; font-color: "#334155"}}
+  data: {shape: cylinder; style: {fill: "#ECFDF5"; stroke: "#059669"; font-color: "#064E3B"}}
+}
+
+msg: "Chat message" {class: end}
+memory: "Postgres\nconversations +\nconversation_messages\n(last 6 turns)" {class: data}
+
+quick: "keyword shortcut\n\"hi\" · \"thanks\" · \"help\"\nfree, instant" {class: code}
+route: "route + rewrite\nClaude Haiku 5.5\nintent · standalone question\n· scope · job order\nunder 1 s, under 0.1 cent" {class: ai}
+
+greet: "greeting / help\nreply written by code\n+ today's context\n(shortlists, new resumes)" {class: code}
+off: "off-topic / unsafe\npolite redirect\nno search" {class: code}
+follow: "follow-up\nsearch only the\ncandidates the last\nanswer discussed" {class: code}
+jo: "job order\nplan from its\nstructured requirements" {class: code}
+
+rag: "RAG pipeline (Block 5)\nunderstand → retrieve\n→ rerank → answer\n→ citation check" {class: node}
+
+reply: "Reply\n+ suggestion chips" {class: end}
+
+msg -> quick
+quick -> greet: "matched"
+quick -> route: "anything else"
+memory -> route: "history" {style.stroke-dash: 3}
+route -> greet: "greeting · help"
+route -> off: "off_topic"
+route -> follow: "follow_up"
+route -> jo: "job_order"
+route -> rag: "search"
+follow -> rag
+jo -> rag
+greet -> reply
+off -> reply
+rag -> reply
+reply -> memory: "save both messages\n(only on success)" {style.stroke-dash: 3}

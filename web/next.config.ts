@@ -6,6 +6,8 @@ import type { NextConfig } from "next";
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
+  // Hide the dev-mode route indicator (it overlaps the UI in demos); errors still surface.
+  devIndicators: false,
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
@@ -15,6 +17,10 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
+  },
+  // The test data page moved into the portal shell; keep the old dev URL working.
+  async redirects() {
+    return [{ source: "/seed", destination: "/admin/test-data", permanent: false }];
   },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${API_INTERNAL_URL}/api/:path*` }];

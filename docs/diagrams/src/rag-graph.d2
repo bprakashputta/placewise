@@ -1,0 +1,42 @@
+# The Ask (RAG) LangGraph as built in Block 5 (one LangSmith trace per question).
+vars: {d2-config: {theme-id: 0; pad: 40}}
+direction: right
+
+classes: {
+  node: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; border-radius: 10; font-color: "#1E1B4B"; stroke-width: 2}}
+  ai: {style: {fill: "#FFF7ED"; stroke: "#EA580C"; border-radius: 10; font-color: "#7C2D12"; stroke-width: 2}}
+  code: {style: {fill: "#ECFDF5"; stroke: "#059669"; border-radius: 10; font-color: "#064E3B"; stroke-width: 2}}
+  end: {shape: oval; style: {fill: "#F1F5F9"; stroke: "#64748B"; font-color: "#334155"}}
+  data: {shape: cylinder; style: {fill: "#ECFDF5"; stroke: "#059669"; font-color: "#064E3B"}}
+}
+
+q: "Recruiter question\n\"Texas PEs in DFW,\ndrainage, 8+ yrs\"" {class: end}
+
+understand: "understand\nClaude Haiku 5.5\n(LangChain ChatAnthropic)\n→ search query\n+ hard filters" {class: ai}
+
+retrieve: "retrieve (our SQL)\n" {
+  class: node
+  filters: "hard filters\nlicense · metro · years\ndiscipline" {class: code}
+  vec: "vector search\nvoyage-4-large\npgvector HNSW" {class: ai}
+  kw: "keyword search\nPostgres full-text" {class: code}
+  rrf: "Reciprocal Rank\nFusion (k=60)" {class: code}
+  filters -> vec
+  filters -> kw
+  vec -> rrf
+  kw -> rrf
+}
+
+rerank: "rerank\nVoyage rerank-3\ntop 50 → 30\ngroup by candidate" {class: ai}
+answer: "answer\nClaude Sonnet 5.5\nfrom resume text +\nverified facts only" {class: ai}
+check: "citation check (code)\nquote must exist in\nthe cited section" {class: code}
+out: "Answer + citations\n+ candidate cards\nabout 14 s, 3 cents" {class: end}
+
+db: "Postgres\ncurrent_chunks\nprofiles" {class: data}
+
+q -> understand
+understand -> retrieve
+retrieve -> rerank
+rerank -> answer
+answer -> check
+check -> out
+retrieve <-> db: {style: {stroke-dash: 3}}

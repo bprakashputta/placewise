@@ -1,8 +1,5 @@
 """Candidate API for the portal: list/filter, detail, resume view/download, upload.
-
-TODO(Block 3): require an authenticated session (recruiter or admin) on every route here before
-any public link is shared. Today the stack is local-only (127.0.0.1).
-"""
+Every route requires a signed-in user (applied in main.py)."""
 from __future__ import annotations
 
 import hashlib
@@ -44,7 +41,8 @@ async def list_candidates(
         args.append(min_years)
     if q:
         where.append("(full_name ILIKE %s OR headline ILIKE %s OR city ILIKE %s OR %s = ANY(software))")
-        like = f"%{q}%"
+        esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")   # literal % and _
+        like = f"%{esc}%"
         args += [like, like, like, q]
     sql_where = " AND ".join(where)
     async with pool().connection() as conn:

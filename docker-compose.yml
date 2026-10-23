@@ -31,6 +31,10 @@ services:
       DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise
       APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in .env}
       DAILY_LLM_SPEND_CAP_USD: ${DAILY_LLM_SPEND_CAP_USD:-10}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Demo portal accounts (created on startup; passwords only in .env)
+      PLACEWISE_DEMO_ADMIN_PASSWORD: ${PLACEWISE_DEMO_ADMIN_PASSWORD:-}
+      PLACEWISE_DEMO_RECRUITER_PASSWORD: ${PLACEWISE_DEMO_RECRUITER_PASSWORD:-}
       # Owner's .env names → standard SDK names
       ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
       VOYAGE_API_KEY: ${PLACEWISE_VOYAGE_TEST_API_KEY:-}
@@ -42,7 +46,7 @@ services:
       db:
         condition: service_healthy
     # Development: reload on code changes. The venv lives in /opt/venv, so mounting src is safe.
-    command: ["uvicorn", "placewise.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
+    command: ["uvicorn", "placewise.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "75", "--reload", "--reload-dir", "/app/src"]
     volumes:
       - ./src:/app/src
       # Seed page (dev): aggregates + files only. data/seed/truth is deliberately NOT mounted.
@@ -101,7 +105,9 @@ services:
       # Evals compare what the app stored against the answer key (this container is the only one with both)
       DATABASE_URL: postgresql://placewise:${POSTGRES_PASSWORD}@db:5432/placewise
       APP_SECRET_KEY: ${APP_SECRET_KEY:-unused-in-seed}
+      DAILY_LLM_SPEND_CAP_USD: ${DAILY_LLM_SPEND_CAP_USD:-10}   # evals count against the same daily cap
       ANTHROPIC_API_KEY: ${PLACEWISE_ANTHROPIC_TEST_API_KEY:-}
+      VOYAGE_API_KEY: ${PLACEWISE_VOYAGE_TEST_API_KEY:-}
       LANGSMITH_TRACING: ${SEED_TRACING:-false}   # off for data generation; evals turn it on (SEED_TRACING=true)
       LANGSMITH_API_KEY: ${PLACEWISE_LANGSMITH_TEST_API_KEY:-}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}

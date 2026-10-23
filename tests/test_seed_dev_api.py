@@ -141,6 +141,6 @@ def test_samples_traversal_blocked(client, tmp_path):
 
 def test_routes_only_in_dev(load_app):
     _, dev = load_app("dev")
-    assert dev.get("/api/dev/seed/files").status_code == 200
+    assert dev.get("/api/dev/seed/files").status_code == 401   # exists in dev, but admin sign-in required
     _, prod = load_app("prod")
-    assert prod.get("/api/dev/seed/files").status_code == 404
+    assert prod.get("/api/dev/seed/files").status_code == 404  # doesn't exist at all in prod

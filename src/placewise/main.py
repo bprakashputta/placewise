@@ -8,13 +8,20 @@ Route layout (security boundary):
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI, Response
+from fastapi import APIRouter, Depends, FastAPI, Response
 from langsmith import traceable
 
 from . import __version__
 from .config import get_settings
 from .db import close_pool, open_pool
+from .auth import current_user, ensure_demo_users, require_admin
+from .auth import router as auth_router
 from .candidates_api import router as candidates_router
+from .conversations_api import router as conversations_router
+from .matching_api import dev_router as jobs_dev_router
+from .matching_api import router as jobs_router
+from .rag_api import router as rag_router
+from .stats_api import router as stats_router
 from .health import check_db, check_langsmith
 from .ingest_api import dev_router as ingest_dev_router
 from .ingest_api import router as ingest_router
@@ -25,6 +32,9 @@ from .migrate import migrate
 async def lifespan(app: FastAPI):
     await asyncio.to_thread(migrate)  # idempotent; an advisory lock serializes api and worker
     await open_pool()
+    await ensure_demo_users()
+    from .matching.engine import fail_interrupted_runs
+    await fail_interrupted_runs()
     yield
     await close_pool()
 
@@ -68,8 +78,14 @@ async def health(response: Response) -> dict:
 
 
 app.include_router(api)
-app.include_router(ingest_router)
-app.include_router(candidates_router)
+# Every portal API route requires a signed-in user; admin-only routes add require_admin.
+app.include_router(auth_router)
+app.include_router(stats_router)
+app.include_router(ingest_router, dependencies=[Depends(current_user)])
+app.include_router(candidates_router, dependencies=[Depends(current_user)])
+app.include_router(rag_router, dependencies=[Depends(current_user)])
+app.include_router(jobs_router, dependencies=[Depends(current_user)])
+app.include_router(conversations_router, dependencies=[Depends(current_user)])
 
 if DEV:
     @traceable(name="placewise.trace_check", run_type="chain")
@@ -85,5 +101,6 @@ if DEV:
     # can reach it, but it is only registered in dev, so it doesn't exist in prod.
     from .dev_seed import router as dev_seed_router
 
-    app.include_router(dev_seed_router)
-    app.include_router(ingest_dev_router)
+    app.include_router(dev_seed_router, dependencies=[Depends(require_admin)])
+    app.include_router(ingest_dev_router, dependencies=[Depends(require_admin)])
+    app.include_router(jobs_dev_router, dependencies=[Depends(require_admin)])
