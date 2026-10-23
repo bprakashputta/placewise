@@ -7,14 +7,14 @@ Status: ⬜ not started · 🟨 design proposed · 🟦 in progress · ✅ done
 |---|---|---|---|
 | 0 | **Foundation** | Repo, agent context (AGENTS.md), GitHub, Docker Compose skeleton (db, api health, web hello), `.env` wiring, LangSmith connection check | ✅ merged (tag block-00-done) |
 | 1 | **Synthetic data** | Facts generator (code) → resume text (LLM) → PDF/DOCX; job orders; ground-truth file; tricky cases | ✅ built, reviewed, tested, documented; owner approved merge |
-| 2 | **Ingest pipeline** | DB migrations (schema as versioned migrations); ingest LangGraph (parse PDF/DOCX → extract profile → validate → blind copy → section chunks → Voyage embed → store), Postgres queue + worker, idempotency, LangSmith traces | 🟨 design approved by owner; starts after Block 1 merge |
-| 3 | **Portal shell + auth** | Next.js app shell, login, admin/recruiter roles, Candidates list and profile pages | 🟦 portal shell (frontend only) in progress in parallel on block/03-portal-shell; auth + data wiring after Block 2 |
+| 2 | **Ingest pipeline** | DB migrations (schema as versioned migrations); ingest LangGraph (parse PDF/DOCX → extract profile → validate → blind copy → section chunks → Voyage embed → store), Postgres queue + worker, idempotency, LangSmith traces | ✅ built, reviewed, tested, documented; PR open, awaiting owner approval + merge ([PR #1](https://github.com/bprakashputta/placewise/pull/1)) |
+| 3 | **Portal shell + auth** | Next.js app shell, login, admin/recruiter roles, Candidates list and profile pages | 🟦 shell built on block/03-portal-shell; next: auth + real data wiring (after Block 2 merge) |
 | 4 | **Job orders** | Notes → structured job order + clarifying questions; Job Orders pages | ⬜ |
 | 5 | **Retrieval + RAG** | Hard filters + hybrid search + RRF + rerank; Ask page with cited answers | ⬜ |
 | 6 | **Matching + approvals** | Match LangGraph (parallel scoring, evidence verification, code-computed score, blind scoring, flags) → submittals and outreach → approval interrupt; Shortlist and Approvals pages | ⬜ |
 | 7 | **Recruiter agent** | LangGraph agent with tools, streaming chat UI, visible tool steps, step and cost limits | ⬜ |
 | 8 | **n8n core** | Workflows 1 (resume intake), 4 (job order → match), 5 (approved → send to Mailpit); Apply page | ⬜ |
-| 9 | **Evals, ops, polish** | LangSmith datasets and evaluators, Haiku vs Sonnet comparison, Ops dashboard, demo script, study guide, tunnel link | ⬜ |
+| 9 | **Evals, ops, polish** | LangSmith datasets and evaluators, Haiku vs Sonnet comparison, Ops dashboard, demo script, study guide, tunnel link | ⬜ (see Block 9 notes) |
 | 10 | Stretch | Bench revival and MPC pitches; n8n workflows 2, 3, 6, 7 | ⬜ |
 | 11 | Later: **Resume Generator v2** | Separate feature (owner, 2026-10-22): stronger writer model (Sonnet/Opus), more templates and human formatting quirks, visual quality check, "Show hidden text" view for adversarial files; possibly an admin "synthetic data studio" page. Block 1 ships a good-enough v1 so feature work isn't delayed. | ⬜ |
 
@@ -35,6 +35,18 @@ Status: ⬜ not started · 🟨 design proposed · 🟦 in progress · ✅ done
   - Live: db/api healthy, web up, `/seed` returns 200. No `.env` or worktree paths tracked.
   - Gaps: the build log has no entry for the worktree-pointer incident (`7da7b8d` → `ba3470c`).
   - Next: lead merges `git merge --no-ff block/01-synthetic-data` → tag `block-01-done` → Block 2.
+- **Block 2 close-out (2026-10-22, branch `block/02-ingest` @ `8c9b7e7`, PR open: https://github.com/bprakashputta/placewise/pull/1):**
+  - Design (Postgres `SKIP LOCKED` queue + worker service + LangGraph ingest graph + Sonnet extraction + code validation + chunks/Voyage embeddings + ingest/candidate APIs) approved by the owner in chat; recorded in `docs/modules/ingest.md` and ADRs 010–016. The owner chose Sonnet over Haiku after the dev-split eval (ADR 012). Owner-directed additions during the block: PR-based workflow with CI + Claude Code review (`9c7e7a9`); D2 diagrams instead of Mermaid (`be83e4c`, ADR 016); the spend cap (`DAILY_LLM_SPEND_CAP_USD`, an app setting the lead created, default $10) raised to $25 for the full ingest.
+  - Built in `d48318d` (A: migrations, queue, worker), `02da54b` (B: parse + screen), `6c56f92` (C: extraction + validation + Haiku/Sonnet eval), `e821b74`/`d430668` (D: graph, chunks, embeddings, candidate API, spend-cap pause); fixes `1c86499` (pre-existing lint), `6c5c9b7` (person matching, dev reset, end-to-end eval).
+  - Reviewer: CHANGES REQUIRED → 1 blocker + 9 should-fix, all fixed in `8fc541e`. QA: PASS WITH ISSUES → 4 bugs fixed in `b746cdd`; 246 unit tests + 24 DB integration tests (throwaway DB). UX review: not applicable (no UI in Block 2; the portal shell is on `block/03-portal-shell`).
+  - Docs in `8c9b7e7`: `docs/modules/ingest.md`, ADRs 010–016, all diagrams in D2 with rendered SVGs (no Mermaid left in docs), README; build-log Block 2 entries present.
+  - Evals (stored data vs answer key): routing 597/597, licenses+state 99.7%, people 563 = 563, unusable/adversarial 100%, flawed 88% precision / 92% recall, cost $12.23 total.
+  - Live: api + db healthy, 3 workers up, web up; `/api/ingest/summary` → done 583, duplicate 8, needs_attention 8. No `.env` or worktree paths tracked. CI at close-out: GitGuardian passed; backend tests, web lint + build and Claude Code review still running.
+  - Minor gaps: build log says ~$12.12 and "581 processed" vs $12.23 (likely incl. the $0.11 re-ingest) and 583 done live (likely QA/upload test jobs); `.env.example` still shows the $10 default (intended).
+  - Next: wait for CI + Claude review on PR #1, fix findings → owner approves the PR → `git merge --no-ff block/02-ingest` → tag `block-02-done` → Block 3 auth + data wiring.
+- **Block 9 notes:**
+  - Set `DAILY_LLM_SPEND_CAP_USD` back down before sharing the public link (lead's responsibility).
+  - LangSmith: hide inputs/outputs for any real data.
 - The early pre-design scaffold (`src/copilot/`: config, schemas, db, llm) was removed in Block 0. It's kept in git history at commit `8c55933` for reference when building blocks 2–6.
 - The local `.venv` predates the folder rename and is not used. Everything runs in Docker. Safe to delete.
 - 2026-10-22: the owner approved building the Block 3 portal shell (frontend only) in parallel with Block 2, in an isolated worktree on `block/03-portal-shell`, to have the UI sooner for the interview. Auth and data wiring stay in Block 3 after ingest.
