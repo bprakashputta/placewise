@@ -29,7 +29,15 @@ const HEADER = {
 /** Admin-only, like the other admin pages: a skeleton until the user is known, then recruiters get the
  * "Admins only" state without any request being made. */
 export function SystemStatusView() {
-  const { user } = useUser();
+  const { user, loading } = useUser();
+  if (!user && !loading) {   // /api/auth/me failed with something other than 401 (e.g. the api restarting)
+    return (
+      <div className="space-y-6">
+        <PageHeader {...HEADER} />
+        <ApiErrorState error={new ApiError(503, "Couldn't load your account. Refresh the page to try again.")} />
+      </div>
+    );
+  }
   if (!user) {
     return (
       <div className="space-y-6">

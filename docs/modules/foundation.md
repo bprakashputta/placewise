@@ -3,7 +3,7 @@
 ## Purpose (plain words)
 Block 0 has no recruiting features yet. It builds the base everything else runs on: three containers (database, API, web portal) that start with one command, talk to each other safely, and show a **System status** page that answers one question: *is every piece connected?*
 
-For a recruiter, this is the page that says "All systems operational", or tells you which piece is down. For the owner, it proves the full path browser → web → api → db (and LangSmith tracing) works before any AI logic is added on top.
+For an admin (Admin → System status), this is the page that says "All systems operational", or tells you which piece is down. For the owner, it proves the full path browser → web → api → db (and LangSmith tracing) works before any AI logic is added on top.
 
 ## Services
 | Service | Image / build | What it does | Host port |
