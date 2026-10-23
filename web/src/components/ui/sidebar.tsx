@@ -205,49 +205,134 @@ function Sidebar({
   }
 
   return (
-    <div
-      className="group peer hidden text-sidebar-foreground md:block"
-      data-state={state}
-      data-collapsible={state === "collapsed" ? collapsible : ""}
-      data-variant={variant}
-      data-side={side}
-      data-slot="sidebar"
-    >
-      {/* This is what handles the sidebar gap on desktop */}
-      <div
-        data-slot="sidebar-gap"
-        className={cn(
-          "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
-          "group-data-[collapsible=offcanvas]:w-0",
-          "group-data-[side=right]:rotate-180",
-          variant === "floating" || variant === "inset"
-            ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
-        )}
-      />
-      <div
-        data-slot="sidebar-container"
-        data-side={side}
-        className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
-          // Adjust the padding for floating and inset variants.
-          variant === "floating" || variant === "inset"
-            ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
-          className
-        )}
-        {...props}
-      >
+    <SidebarPeek collapsed={state === "collapsed" && collapsible === "icon"}>
+      {(peek, peekHandlers) => (
         <div
-          data-sidebar="sidebar"
-          data-slot="sidebar-inner"
-          className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
+          className="group peer hidden text-sidebar-foreground md:block"
+          data-state={peek ? "expanded" : state}
+          data-collapsible={state === "collapsed" && !peek ? collapsible : ""}
+          data-peek={peek ? "" : undefined}
+          data-variant={variant}
+          data-side={side}
+          data-slot="sidebar"
         >
-          {children}
+          {/* This is what handles the sidebar gap on desktop */}
+          <div
+            data-slot="sidebar-gap"
+            className={cn(
+              "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+              "group-data-[collapsible=offcanvas]:w-0",
+              "group-data-[side=right]:rotate-180",
+              variant === "floating" || variant === "inset"
+                ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
+                : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
+              // Peeking: the menu opens over the page, so the reserved space keeps the icon rail's width
+              peek &&
+                (variant === "floating" || variant === "inset"
+                  ? "w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
+                  : "w-(--sidebar-width-icon)")
+            )}
+          />
+          <div
+            data-slot="sidebar-container"
+            data-side={side}
+            className={cn(
+              "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
+              // Adjust the padding for floating and inset variants.
+              variant === "floating" || variant === "inset"
+                ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
+                : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              peek && "z-40 shadow-2xl",
+              className
+            )}
+            {...props}
+            {...withPeek(props, peekHandlers)}
+          >
+            <div
+              data-sidebar="sidebar"
+              data-slot="sidebar-inner"
+              className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
+            >
+              {children}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </SidebarPeek>
   )
+}
+
+// Hover (or keyboard focus) on the collapsed icon rail "peeks" the full menu over the page, without
+// moving the page; leaving tucks it back. Short delays stop it flashing when the pointer passes over.
+const SidebarPeekContext = React.createContext(false)
+
+// Call the caller's own handlers too, so passing onMouseEnter/onFocus to <Sidebar> can't disable peek.
+function withPeek(props: React.HTMLAttributes<HTMLDivElement>, peek: PeekHandlers): PeekHandlers {
+  if (!peek.onMouseEnter) return {}   // not collapsed: the caller's handlers from {...props} apply as-is
+  return {
+    onMouseEnter: (e) => {
+      props.onMouseEnter?.(e)
+      peek.onMouseEnter?.(e)
+    },
+    onMouseLeave: (e) => {
+      props.onMouseLeave?.(e)
+      peek.onMouseLeave?.(e)
+    },
+    onFocus: (e) => {
+      props.onFocus?.(e)
+      peek.onFocus?.(e)
+    },
+    onBlur: (e) => {
+      props.onBlur?.(e)
+      peek.onBlur?.(e)
+    },
+  }
+}
+
+type PeekHandlers = Pick<
+  React.HTMLAttributes<HTMLDivElement>,
+  "onMouseEnter" | "onMouseLeave" | "onFocus" | "onBlur"
+>
+
+function SidebarPeek({
+  collapsed,
+  children,
+}: {
+  collapsed: boolean
+  children: (peek: boolean, handlers: PeekHandlers) => React.ReactNode
+}) {
+  const [peek, setPeek] = React.useState(false)
+  const [want, setWant] = React.useState<{ open: boolean; ms: number } | null>(null)
+  // When the rail stops being collapsed (a page expands the menu, ⌘B, the trigger), the hover handlers
+  // go away, so reset the peek here; otherwise it would pop open by itself the next time it collapses.
+  const [wasCollapsed, setWasCollapsed] = React.useState(collapsed)
+  if (wasCollapsed !== collapsed) {
+    setWasCollapsed(collapsed)
+    if (!collapsed) {
+      setPeek(false)
+      setWant(null)
+    }
+  }
+  // Handlers record the wanted state; the effect applies it after a short delay. A newer request
+  // replaces the pending one (the effect cleanup cancels its timer), which debounces quick passes.
+  React.useEffect(() => {
+    if (!want) return
+    const id = setTimeout(() => setPeek(want.open), want.ms)
+    return () => clearTimeout(id)
+  }, [want])
+  const later = (open: boolean, ms: number) => setWant({ open, ms })
+  const active = collapsed && peek
+  const handlers: PeekHandlers = collapsed
+    ? {
+        onMouseEnter: () => later(true, 120),
+        onMouseLeave: () => later(false, 180),
+        onFocus: () => later(true, 0),
+        onBlur: (e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) later(false, 0)
+        },
+      }
+    : {}
+  return <SidebarPeekContext.Provider value={active}>{children(active, handlers)}</SidebarPeekContext.Provider>
 }
 
 function SidebarTrigger({
@@ -291,6 +376,8 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
+        // while peeking the menu is really collapsed, so clicking the rail expands it: same cursor as collapsed
+        "[[data-side=left][data-peek]_&]:cursor-e-resize [[data-side=right][data-peek]_&]:cursor-w-resize",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
         "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
         "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
@@ -306,7 +393,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2 md:peer-data-[variant=inset]:peer-data-peek:ml-2",
         className
       )}
       {...props}
@@ -502,6 +589,7 @@ function SidebarMenuButton({
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot.Root : "button"
   const { isMobile, state } = useSidebar()
+  const peeking = React.useContext(SidebarPeekContext)
 
   const button = (
     <Comp
@@ -530,7 +618,7 @@ function SidebarMenuButton({
       <TooltipContent
         side="right"
         align="center"
-        hidden={state !== "collapsed" || isMobile}
+        hidden={state !== "collapsed" || isMobile || peeking}
         {...tooltip}
       />
     </Tooltip>
