@@ -14,7 +14,9 @@ export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null;
   // Keep the latest onClose in a ref so parent re-renders (the 2s poll) don't re-run the effect,
   // which used to steal focus back to Close every poll.
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   const openerRef = useRef<Element | null>(null);
 
   useEffect(() => {
@@ -35,6 +37,8 @@ export function ResumeViewer({ target, onClose }: { target: ViewerTarget | null;
     if (!target) return;
     let objectUrl: string | null = null;
     let alive = true;
+    // Reset to the spinner when a different resume is opened; intentional, not a cascade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoad({ state: "loading" });
     fetch(target.viewUrl, { cache: "no-store" })
       .then(async (res) => {
