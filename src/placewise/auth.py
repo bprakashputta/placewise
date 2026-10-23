@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from collections import defaultdict, deque
@@ -81,15 +82,33 @@ async def require_admin(user: dict = Depends(current_user)) -> dict:
 
 
 def _client_ip(request: Request) -> str:
+    """The client's address as seen by OUR proxy. The rightmost X-Forwarded-For entry is the one Next.js
+    appended; earlier entries are client-controlled and could be spoofed to dodge the rate limit.
+    Behind the Cloudflare tunnel, CF-Connecting-IP is set by Cloudflare itself."""
+    cf = request.headers.get("cf-connecting-ip")
+    if cf:
+        return cf.strip()
     fwd = request.headers.get("x-forwarded-for")
-    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
+    if fwd:
+        return fwd.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
 
 
-def _rate_limited(ip: str) -> bool:
-    q, now = _failures[ip], time.monotonic()
-    while q and now - q[0] > LOGIN_WINDOW_S:
-        q.popleft()
-    return len(q) >= LOGIN_LIMIT
+def _rate_limited(*keys: str) -> bool:
+    """Limited if ANY key (client IP, or the username being tried) has too many recent failures."""
+    now = time.monotonic()
+    limited = False
+    for key in keys:
+        q = _failures.get(key)
+        if not q:
+            continue
+        while q and now - q[0] > LOGIN_WINDOW_S:
+            q.popleft()
+        if not q:
+            _failures.pop(key, None)   # evict, so spoofed or one-off keys don't pile up
+        elif len(q) >= LOGIN_LIMIT:
+            limited = True
+    return limited
 
 
 class LoginBody(BaseModel):
@@ -104,19 +123,25 @@ def _public(user: dict) -> dict:
 @router.post("/login")
 async def login(body: LoginBody, request: Request, response: Response) -> dict:
     ip = _client_ip(request)
-    if _rate_limited(ip):
+    uname = body.username.strip().lower()[:100]
+    ukey = f"user:{uname}"
+    if _rate_limited(f"ip:{ip}", ukey):
         raise HTTPException(429, "Too many attempts, wait a minute")
     async with pool().connection() as conn:
         cur = conn.cursor(row_factory=dict_row)
         await cur.execute("SELECT id, username, display_name, role, password_hash FROM users "
-                          "WHERE username = %s AND is_active", (body.username.strip().lower(),))
+                          "WHERE username = %s AND is_active", (uname,))
         user = await cur.fetchone()
-        ok = verify_password(body.password, user["password_hash"] if user else _DUMMY_HASH)
-        if not (user and ok):
-            _failures[ip].append(time.monotonic())
-            raise HTTPException(401, "Wrong username or password")
+    # Argon2 is deliberately slow: verify in a thread (not on the event loop, not holding a DB connection)
+    ok = await asyncio.to_thread(verify_password, body.password, user["password_hash"] if user else _DUMMY_HASH)
+    if not (user and ok):
+        _failures[f"ip:{ip}"].append(time.monotonic())
+        _failures[ukey].append(time.monotonic())
+        raise HTTPException(401, "Wrong username or password")
+    async with pool().connection() as conn:
         await conn.execute("UPDATE users SET last_login_at = now() WHERE id = %s", (user["id"],))
-    _failures.pop(ip, None)
+    _failures.pop(f"ip:{ip}", None)
+    _failures.pop(ukey, None)
     token = _serializer().dumps({"uid": user["id"], "role": user["role"]})
     response.set_cookie(COOKIE, token, max_age=SESSION_HOURS * 3600, httponly=True, samesite="lax",
                         secure=get_settings().cookie_secure, path="/")

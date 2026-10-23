@@ -107,7 +107,8 @@ async def answer(question: str, hits: list[Hit], names: dict[int, str], profiles
     kept, dropped = [], []
     for c in ans.citations:
         h = by_id.get(c.chunk_id)
-        if h is not None and _norm(c.quote) and _norm(c.quote) in _norm(h.content):
+        q = _norm(c.quote)
+        if h is not None and len(q) >= 12 and q in _norm(h.content):   # short quotes could match by accident
             kept.append(c)
         else:
             dropped.append(f"citation to section {c.chunk_id} not found in retrieved text: {c.quote[:80]!r}")

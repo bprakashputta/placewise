@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from .auth import current_user
 from .db import pool
 from .ingest.spend import SpendCapReached
-from .matching.engine import extract_job, run_match
+from .matching.engine import STALE_RUN_MIN, RunInProgress, extract_job, run_match
 
 router = APIRouter(prefix="/api", tags=["job orders"])
 dev_router = APIRouter(prefix="/api/dev/job-orders", tags=["dev: job orders"])
@@ -80,6 +80,8 @@ async def start_match(job_id: int, user: dict = Depends(current_user)) -> dict:
         run_id = await run_match(job_id, user["id"])
     except ValueError:
         raise HTTPException(404, "job order not found")
+    except RunInProgress as e:
+        raise HTTPException(409, str(e))
     except SpendCapReached as e:
         raise HTTPException(429, str(e))
     return {"run_id": run_id, "status": "running"}
@@ -96,6 +98,12 @@ async def matches(job_id: int, run_id: str | None = None) -> dict:
         run = await cur.fetchone()
         if not run:
             return {"run": None, "matches": []}
+        if run["status"] == "running":   # safety net: a run that's been 'running' too long is dead
+            await cur.execute("SELECT now() - %s > make_interval(mins => %s) AS stale", (run["started_at"], STALE_RUN_MIN))
+            if (await cur.fetchone())["stale"]:
+                await conn.execute("UPDATE match_runs SET status='failed', error='timed out', finished_at=now() "
+                                   "WHERE run_id=%s AND status='running'", (run["run_id"],))
+                run = {**run, "status": "failed", "error": "timed out; please run matching again"}
         await cur.execute(
             """SELECT m.id, m.person_id, m.resume_file_id, m.score, m.recommendation, m.verdicts, m.flags, m.summary,
                       m.retrieval_rank, m.status, c.full_name, c.headline, c.metro, c.years_experience,

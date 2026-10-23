@@ -106,7 +106,8 @@ async def n_answer(s: AskState) -> AskState:
     ans, usage, dropped = await answer(s["question"], top, s["names"], profiles,
                                        "; ".join(x for x in parts if x) or "none")
     await log_call("ask", "rag.answer", usage["model"], ANSWER_PROMPT_VERSION, usage.get("input_tokens", 0),
-                   usage.get("output_tokens", 0), usage["latency_ms"], usage["cost_usd"], "ok")
+                   usage.get("output_tokens", 0), usage["latency_ms"], usage["cost_usd"],
+                   "invalid_output" if ans.answer.startswith("I couldn't produce") else "ok")
     return {"answer": ans.model_dump(), "dropped": dropped, "usage": {**s["usage"], "answer": usage},
             "timings": {**s["timings"], "answer_ms": int((time.perf_counter() - t0) * 1000)}}
 

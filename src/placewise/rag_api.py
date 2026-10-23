@@ -1,5 +1,5 @@
 """RAG API: ask questions (cited answers) and smart candidate search. Requires a signed-in user."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .ingest.spend import SpendCapReached
@@ -32,7 +32,7 @@ async def ask(body: AskBody) -> dict:
 
 
 @router.get("/search")
-async def search(q: str, discipline: str | None = None, metro: str | None = None, license: str | None = None,
+async def search(q: str = Query(min_length=2, max_length=300), discipline: str | None = None, metro: str | None = None, license: str | None = None,
                  min_years: float | None = None, limit: int = 20) -> dict:
     """Semantic + keyword candidate search with optional hard filters (no LLM call, ~0.5 s)."""
     f = Filters(discipline=discipline, metro=metro, license_codes=[license] if license else [], min_years=min_years)

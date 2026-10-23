@@ -71,11 +71,15 @@ const md: Components = {
   h1: ({ children }) => <h3 className="mt-4 text-base font-semibold first:mt-0">{children}</h3>,
   h2: ({ children }) => <h3 className="mt-4 text-base font-semibold first:mt-0">{children}</h3>,
   h3: ({ children }) => <h4 className="mt-4 text-sm font-semibold first:mt-0">{children}</h4>,
-  a: ({ href, children }) => (
-    <a href={href} className="font-medium text-brand underline-offset-2 hover:underline">
-      {children}
-    </a>
-  ),
+  // Answers are model output over untrusted resume text: only allow same-site links, render others as text.
+  a: ({ href, children }) =>
+    href && href.startsWith("/") && !href.startsWith("//") ? (
+      <a href={href} className="font-medium text-brand underline-offset-2 hover:underline">
+        {children}
+      </a>
+    ) : (
+      <span>{children}</span>
+    ),
   code: ({ children }) => <code className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]">{children}</code>,
   blockquote: ({ children }) => <blockquote className="mt-3 border-l-2 pl-3 text-muted-foreground italic">{children}</blockquote>,
   table: ({ children }) => (
@@ -122,7 +126,8 @@ function Answer({ r, onCite }: { r: AskResponse; onCite: (c: Citation) => void }
   return (
     <div className="space-y-5">
       <div className="text-sm">
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={md}>
+        {/* No images: an injected resume could otherwise make the browser fetch an attacker URL */}
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={md} disallowedElements={["img"]} unwrapDisallowed>
           {r.answer}
         </ReactMarkdown>
       </div>

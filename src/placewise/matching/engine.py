@@ -39,10 +39,25 @@ def _sem() -> asyncio.Semaphore:
         _SEM = asyncio.Semaphore(CONCURRENCY)
     return _SEM
 MATCH_PROMPT_VERSION = 2
+MIN_QUOTE_CHARS = 12
+STALE_RUN_MIN = 10
 WEIGHT = {"must": 3.0, "nice": 1.0}
 VALUE = {"met": 1.0, "partial": 0.5, "unknown": 0.25, "not_met": 0.0}
 _models: dict = {}
 _tasks: set = set()
+
+
+class RunInProgress(Exception):
+    pass
+
+
+async def fail_interrupted_runs() -> int:
+    """At startup: runs still 'running' were interrupted (restart, crash). Mark them failed so the UI recovers."""
+    async with pool().connection() as conn:
+        cur = await conn.execute("UPDATE match_runs SET status='failed', error='interrupted (the server restarted '"
+                                 "'during the run); please run matching again', finished_at=now() "
+                                 "WHERE status='running'")
+        return cur.rowcount
 
 
 def _structured(model_id: str, schema):
@@ -86,7 +101,7 @@ def hard_filters(spec: JobSpec) -> list[tuple[str, Filters]]:
     for r in spec.requirements:
         if r.priority != "must":
             continue
-        if r.kind == "license" and r.key and r.state and "or" not in r.text.lower():
+        if r.kind == "license" and r.key and r.state and not re.search(r"\bor\b", r.text, re.I):
             f.license_codes.append(f"{r.key.upper()}:{r.state.upper()}")
         elif r.kind == "location" and spec.metro:
             f.metro = spec.metro
@@ -130,7 +145,7 @@ def code_verdict(r: Requirement, spec: JobSpec, prof: dict) -> RequirementVerdic
         if r.state:
             if any(f"{k}:{r.state.upper()}" in codes for k in alts):
                 return RequirementVerdict(requirement=r.text, verdict="met", evidence=None,
-                                          note=f"Verified {key} license in {r.state.upper()}")
+                                          note=f"Active {key} license in {r.state.upper()} (stated on resume)")
             other = [c for c in codes if c.split(":")[0] in alts]
             if other:
                 return RequirementVerdict(requirement=r.text, verdict="partial", evidence=None,
@@ -138,7 +153,7 @@ def code_verdict(r: Requirement, spec: JobSpec, prof: dict) -> RequirementVerdic
             return RequirementVerdict(requirement=r.text, verdict="not_met", evidence=None,
                                       note=f"No active {key} license on record")
         if any(c.split(":")[0] in alts for c in codes):
-            return RequirementVerdict(requirement=r.text, verdict="met", evidence=None, note=f"Verified {key}")
+            return RequirementVerdict(requirement=r.text, verdict="met", evidence=None, note=f"{key} listed on resume")
         return RequirementVerdict(requirement=r.text, verdict="not_met", evidence=None,
                                   note=f"No active {key} on record")
     if r.kind == "years":
@@ -149,7 +164,9 @@ def code_verdict(r: Requirement, spec: JobSpec, prof: dict) -> RequirementVerdic
         return RequirementVerdict(requirement=r.text, verdict=v, evidence=None,
                                   note=f"{have:g} years (computed from resume dates)")
     if r.kind == "location" and spec.metro:
-        if prof.get("metro") == spec.metro:
+        same_place = prof.get("metro") == spec.metro and (
+            spec.metro != "Other" or (spec.city or "").lower() == (prof.get("city") or "").lower())
+        if same_place:
             return RequirementVerdict(requirement=r.text, verdict="met", evidence=None, note=f"Based in {spec.metro}")
         if prof.get("open_to_relocation"):
             return RequirementVerdict(requirement=r.text, verdict="partial", evidence=None,
@@ -158,8 +175,9 @@ def code_verdict(r: Requirement, spec: JobSpec, prof: dict) -> RequirementVerdic
                                   note=f"Based in {prof.get('metro')}, relocation not stated")
     if r.kind == "discipline":
         ok = prof.get("discipline") == spec.discipline
+        label = (prof.get("discipline") or "unknown").replace("_", " ").capitalize()
         return RequirementVerdict(requirement=r.text, verdict="met" if ok else "not_met", evidence=None,
-                                  note=f"Discipline: {prof.get('discipline')}")
+                                  note=None if ok else f"Discipline on resume: {label}")
     return None
 
 
@@ -225,10 +243,17 @@ async def assess(spec: JobSpec, prof: dict, sem: asyncio.Semaphore, run_id: str)
             for v in a.verdicts:
                 if v.requirement not in soft_texts:
                     continue
-                if v.evidence and _norm(v.evidence) not in text:      # evidence must exist in the profile
-                    v.note = f"evidence not found in profile: {v.evidence[:80]!r}"
-                    v.evidence, v.verdict = None, "unknown" if v.verdict in ("met", "partial") else v.verdict
-                    flags.append("unverified evidence removed")
+                ev = _norm(v.evidence or "")
+                if v.verdict in ("met", "partial"):
+                    # A positive verdict needs a real quote: present, long enough not to match by accident
+                    # (e.g. "PE"), and actually found in the profile text.
+                    if not ev:
+                        v.note, v.verdict = "no evidence quote given", "unknown"
+                        flags.append("unsupported verdict downgraded")
+                    elif len(ev) < MIN_QUOTE_CHARS or ev not in text:
+                        v.note = f"evidence not found in profile: {(v.evidence or '')[:80]!r}"
+                        v.evidence, v.verdict = None, "unknown"
+                        flags.append("unverified evidence removed")
                 verdicts.append(v)
     for cv in code.values():   # surface code-detected license risks as flags too
         if cv.verdict == "partial" and "another state" in (cv.note or ""):
@@ -248,6 +273,13 @@ async def run_match(job_order_id: int, user_id: int | None = None) -> str:
     if not row:
         raise ValueError("job order not found")
     spec = JobSpec.model_validate(row[0])
+    await spend_check()   # refuse up front (clean 429) instead of failing every assessment later
+    async with pool().connection() as conn:
+        cur = await conn.execute(
+            "SELECT run_id FROM match_runs WHERE job_order_id=%s AND status='running' "
+            "AND started_at > now() - make_interval(mins => %s)", (job_order_id, STALE_RUN_MIN))
+        if await cur.fetchone():
+            raise RunInProgress("a match is already running for this job order")
     run_id = f"m-{uuid.uuid4().hex[:10]}"
     steps = hard_filters(spec)
     relaxed: list[str] = []

@@ -33,7 +33,7 @@ Roles: `admin` (everything) and `recruiter` (everything except admin-only routes
 
 ## Admin 🔒
 | GET | `/api/admin/costs` | `{"spend_cap_usd", "spent_today_usd", "by_day": [{day, calls, cost_usd}], "by_step_model": [{step, model, calls, input_tokens, output_tokens, cost_usd}]}` |
-| GET | `/api/ingest/summary` | `{"jobs": {status: n}}` |
+| GET | `/api/ingest/summary` (any signed-in user) | `{"jobs": {status: n}}` |
 | POST | `/api/ingest/jobs/retry-failed` | `{"requeued": n}` |
 
 Display rules for the UI:

@@ -9,9 +9,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 /** Only same-site paths are allowed as a post-login destination (no open redirects). */
+// Only same-origin paths. Parse with URL so tricks like "/\\evil.com" or "/\t/evil.com" (which browsers
+// resolve to another site) can't slip through string checks.
 function safeNext(next: string | null): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) return "/dashboard";
-  return next;
+  if (!next) return "/dashboard";
+  try {
+    const u = new URL(next, window.location.origin);
+    if (u.origin !== window.location.origin || u.pathname.startsWith("/login")) return "/dashboard";
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return "/dashboard";
+  }
 }
 
 const MESSAGES: Record<number, string> = {

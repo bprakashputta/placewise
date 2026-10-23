@@ -32,6 +32,8 @@ async def lifespan(app: FastAPI):
     await asyncio.to_thread(migrate)  # idempotent; an advisory lock serializes api and worker
     await open_pool()
     await ensure_demo_users()
+    from .matching.engine import fail_interrupted_runs
+    await fail_interrupted_runs()
     yield
     await close_pool()
 
