@@ -60,8 +60,11 @@ def _embedder_() -> VoyageAIEmbeddings:
     return _embedder
 
 
-def _where(f: Filters) -> tuple[str, list]:
+def _where(f: Filters, person_ids: list[int] | None = None) -> tuple[str, list]:
     sql, args = ["TRUE"], []
+    if person_ids is not None:   # follow-ups: search only within the candidates already shown
+        sql.append("c.person_id = ANY(%s)")
+        args.append(list(person_ids))
     if f.discipline:
         sql.append("p.discipline = %s")
         args.append(f.discipline)
@@ -85,9 +88,9 @@ def _or_query(text: str) -> str:
     return " OR ".join(words) if words else text
 
 
-async def vector_search(query: str, f: Filters, k: int = 50) -> list[Hit]:
+async def vector_search(query: str, f: Filters, k: int = 50, person_ids: list[int] | None = None) -> list[Hit]:
     vec = np.array(await _embedder_().aembed_query(query), dtype=np.float32)
-    where, args = _where(f)
+    where, args = _where(f, person_ids)
     async with pool().connection() as conn:
         async with conn.transaction():
             # Filtered HNSW: iterative scans keep fetching until enough rows pass the filters (pgvector 0.8)
@@ -104,8 +107,8 @@ async def vector_search(query: str, f: Filters, k: int = 50) -> list[Hit]:
             for i, r in enumerate(rows)]
 
 
-async def keyword_search(query: str, f: Filters, k: int = 50) -> list[Hit]:
-    where, args = _where(f)
+async def keyword_search(query: str, f: Filters, k: int = 50, person_ids: list[int] | None = None) -> list[Hit]:
+    where, args = _where(f, person_ids)
     async with pool().connection() as conn:
         cur = conn.cursor(row_factory=dict_row)
         await cur.execute(
@@ -148,7 +151,8 @@ def group_by_candidate(hits: list[Hit], score_attr: str = "rrf", per_person: int
     return sorted(groups.values(), key=lambda g: g.score, reverse=True)
 
 
-async def hybrid(query: str, f: Filters, k: int = 50, mode: str = "hybrid") -> list[Hit]:
-    vec = await vector_search(query, f, k) if mode in ("hybrid", "vector") else []
-    kw = await keyword_search(query, f, k) if mode in ("hybrid", "keyword") else []
+async def hybrid(query: str, f: Filters, k: int = 50, mode: str = "hybrid",
+                 person_ids: list[int] | None = None) -> list[Hit]:
+    vec = await vector_search(query, f, k, person_ids) if mode in ("hybrid", "vector") else []
+    kw = await keyword_search(query, f, k, person_ids) if mode in ("hybrid", "keyword") else []
     return fuse(vec, kw)

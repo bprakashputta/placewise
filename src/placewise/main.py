@@ -17,6 +17,7 @@ from .db import close_pool, open_pool
 from .auth import current_user, ensure_demo_users, require_admin
 from .auth import router as auth_router
 from .candidates_api import router as candidates_router
+from .conversations_api import router as conversations_router
 from .matching_api import dev_router as jobs_dev_router
 from .matching_api import router as jobs_router
 from .rag_api import router as rag_router
@@ -84,6 +85,7 @@ app.include_router(ingest_router, dependencies=[Depends(current_user)])
 app.include_router(candidates_router, dependencies=[Depends(current_user)])
 app.include_router(rag_router, dependencies=[Depends(current_user)])
 app.include_router(jobs_router, dependencies=[Depends(current_user)])
+app.include_router(conversations_router, dependencies=[Depends(current_user)])
 
 if DEV:
     @traceable(name="placewise.trace_check", run_type="chain")

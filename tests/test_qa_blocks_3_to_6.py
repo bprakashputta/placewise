@@ -35,7 +35,7 @@ def _api_routes(client) -> list[tuple[str, str]]:
 
 def _concrete(path: str) -> str:
     return (path.replace("{name}", "x").replace("{person_id}", "1").replace("{resume_file_id}", "1")
-            .replace("{job_id}", "1").replace("{match_id}", "1").replace("{candidate_id}", "1"))
+            .replace("{job_id}", "1").replace("{match_id}", "1").replace("{conv_id}", "1").replace("{candidate_id}", "1"))
 
 
 @pytest.fixture

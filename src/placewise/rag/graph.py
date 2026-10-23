@@ -24,6 +24,8 @@ MAX_ANSWER_CANDIDATES, CHUNKS_PER_CANDIDATE = 8, 2
 class AskState(TypedDict, total=False):
     question: str
     filters_override: dict | None
+    plan_override: dict | None        # a ready plan (e.g. from a job order's requirements): skip understand
+    person_ids: list[int] | None      # follow-ups: restrict the search to these candidates
     plan: dict
     hits: list
     candidates: list
@@ -60,6 +62,9 @@ async def _credential_chunks(person_ids: list[int]) -> list[Hit]:
 async def n_understand(s: AskState) -> AskState:
     await spend_check()
     t0 = time.perf_counter()
+    if s.get("plan_override"):
+        return {"plan": QueryPlan.model_validate(s["plan_override"]).model_dump(), "usage": {},
+                "timings": {"understand_ms": 0}}
     plan, usage = await understand(s["question"])
     if s.get("filters_override"):
         plan.filters = Filters(**s["filters_override"])
@@ -72,7 +77,7 @@ async def n_understand(s: AskState) -> AskState:
 async def n_retrieve(s: AskState) -> AskState:
     t0 = time.perf_counter()
     plan = QueryPlan.model_validate(s["plan"])
-    hits = await hybrid(plan.search_query or s["question"], plan.filters, k=60)
+    hits = await hybrid(plan.search_query or s["question"], plan.filters, k=60, person_ids=s.get("person_ids"))
     return {"hits": hits, "timings": {**s["timings"], "retrieve_ms": int((time.perf_counter() - t0) * 1000)}}
 
 
@@ -128,10 +133,13 @@ def build():
 GRAPH = build()
 
 
-async def ask(question: str, filters_override: dict | None = None) -> dict[str, Any]:
+async def ask(question: str, filters_override: dict | None = None, plan_override: dict | None = None,
+              person_ids: list[int] | None = None, run_name: str = "ask") -> dict[str, Any]:
     t0 = time.perf_counter()
-    s = await GRAPH.ainvoke({"question": question, "filters_override": filters_override},
-                            config={"run_name": "ask", "tags": ["rag", "ask"], "metadata": {"question": question[:200]}})
+    s = await GRAPH.ainvoke({"question": question, "filters_override": filters_override,
+                             "plan_override": plan_override, "person_ids": person_ids},
+                            config={"run_name": run_name, "tags": ["rag", "ask"],
+                                    "metadata": {"question": question[:200]}})
     profiles = await _profiles([g.person_id for g in s["candidates"]])
     by_chunk = {h.chunk_id: h for h in s["hits"]}
     by_chunk.update({h.chunk_id: h for h in await _credential_chunks([g.person_id for g in s["candidates"]
