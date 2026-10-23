@@ -126,7 +126,7 @@ function HowISearched({ r, isAdmin }: { r: ConversationResponse; isAdmin: boolea
       ))}
       {r.plan?.search_query && <span className="min-w-0 italic">&ldquo;{r.plan.search_query}&rdquo;</span>}
       {meta.length > 0 && (
-        <span className="ml-auto text-[11px] text-muted-foreground/80 tabular-nums" title="Admin only: time and AI cost">
+        <span className="ml-auto text-[11px] text-muted-foreground tabular-nums" title="Admin only: time and AI cost">
           {meta.join(" · ")}
         </span>
       )}
@@ -326,7 +326,7 @@ export function PendingReply() {
                     <span className="size-1 rounded-full bg-muted-foreground/40" />
                   )}
                 </span>
-                <span className={cn(done && "text-muted-foreground", active && "font-medium text-foreground", !done && !active && "text-muted-foreground/70")}>
+                <span className={cn(done && "text-muted-foreground", active && "font-medium text-foreground", !done && !active && "text-muted-foreground")}>
                   {s.label}
                   {active && "…"}
                 </span>
