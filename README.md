@@ -48,12 +48,20 @@ docker compose -f docker-compose.yml -f docker-compose.public.yml logs tunnel | 
 ```
 - The web app runs as a production build; cookies are HTTPS-only; the login rate limit uses Cloudflare's client IP.
 - Everything works as it does locally, except **Reset ingested data**, which is disabled so the shared demo can't be wiped.
-- The daily AI spend cap is `PUBLIC_DAILY_LLM_SPEND_CAP_USD` (default $30).
+- The daily AI spend cap is `PUBLIC_DAILY_LLM_SPEND_CAP_USD` (default $30; $10 on the cloud server).
 - The address is random and changes when the tunnel restarts; the Mac must stay on and awake.
 - Back to local development: `docker compose up -d --build` (dev server with hot reload).
 - **Stable address:** a Cloudflare Worker (`infra/worker/`) at **https://placewise.bprakashputta.workers.dev** forwards to the tunnel, so the link stays the same when the tunnel's random address changes. `scripts/public-link.sh` starts the stack and re-points the Worker (needs `CLOUDFLARE_API_TOKEN` in `.env`, a token scoped to editing Workers).
 - **Self-healing:** `nohup ./scripts/watch-public-link.sh >/dev/null 2>&1 &` checks the public link every 30 s and, after 2 failures, recreates the tunnel and re-points the Worker (tested: link restored ~70 s after killing the tunnel). It also keeps the Mac awake (`caffeinate`). Log: `logs/public-link-watch.log`; stop with `pkill -f watch-public-link.sh`.
 - **Logs and observability:** Workers Logs are on (every request kept). In the Cloudflare dashboard: Workers & Pages → placewise → **Logs** (one JSON line per request: method, path, status, ms, country; never cookies, query values or bodies) and **Metrics**. App-side traces are in LangSmith; container logs via `docker compose logs api web worker tunnel`.
+- **Two tunnels + failover:** the stack runs two quick tunnels (`tunnel`, `tunnel2`); the Worker tries each in turn (3 rounds) and, if all fail, shows a "Reconnecting…" page that reloads itself. The watchdog checks each tunnel and replaces only a dead one.
+
+### Cloud server (Google Cloud VM, always on)
+The demo runs on a Compute Engine VM (`placewise-vm`, e2-medium, standard/not Spot, `us-south1` Dallas, project `placewise-demo-1023`) with the **same Docker Compose stack** plus `docker-compose.server.yml`, which adds Caddy: a direct HTTPS route at `https://<ip-with-dashes>.sslip.io` (Let's Encrypt). The Worker tries the direct route first, then the two tunnels.
+- Server `.env` adds `PUBLIC_DIRECT_HOST`, `ORIGIN_SHARED_SECRET` (Caddy answers 404 without it; the Worker holds it as the `ORIGIN_SECRET` secret) and `PUBLIC_DAILY_LLM_SPEND_CAP_USD=10`.
+- Start / refresh: `./scripts/public-link.sh` on the server (detects `PUBLIC_DIRECT_HOST` and adds the server overlay). The watchdog runs as a systemd service (`infra/server/placewise-watch.service`), starts on boot.
+- Only the Mac **or** the server may run the watchdog, or they'd re-point the Worker at each other.
+- Cost: about $0.85/day; a $20 budget alert emails the owner. Delete the VM (and the `placewise-ip` address) when the demo is over.
 
 ## Synthetic data (seed CLI)
 Runs in the on-demand `seed` tools container. `write`, `samples` and `job-orders` call Claude Haiku 5.5 and need `PLACEWISE_ANTHROPIC_TEST_API_KEY` (a full run costs under $1).

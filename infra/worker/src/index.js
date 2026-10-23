@@ -46,11 +46,19 @@ export default {
       if (ROUND_PAUSE_MS[round]) await new Promise((r) => setTimeout(r, ROUND_PAUSE_MS[round]));
       for (const origin of origins) {
         attempts++;
+        // The direct route to the cloud server (not a trycloudflare tunnel) needs our shared secret,
+        // and gets the visitor's IP in a header Caddy maps to CF-Connecting-IP.
+        let h = headers;
+        if (env.ORIGIN_SECRET && !origin.includes(".trycloudflare.com")) {
+          h = new Headers(headers);
+          h.set("x-placewise-origin", env.ORIGIN_SECRET);
+          h.set("x-placewise-client-ip", request.headers.get("cf-connecting-ip") || "");
+        }
         let res;
         try {
           res = await fetch(new URL(incoming.pathname + incoming.search, origin), {
             method: request.method,
-            headers,
+            headers: h,
             body,
             redirect: "manual", // pass redirects back to the browser, rewritten to this address
           });

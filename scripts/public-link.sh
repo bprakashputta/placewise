@@ -8,6 +8,9 @@
 set -eu
 cd "$(dirname "$0")/.."
 DC="docker compose -f docker-compose.yml -f docker-compose.public.yml"
+envval() { grep "^$1=" .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'"' \r\n'; }
+DIRECT_HOST=$(envval PUBLIC_DIRECT_HOST)   # set only on the cloud server
+[ -n "$DIRECT_HOST" ] && DC="$DC -f docker-compose.server.yml"
 mkdir -p logs
 STATE=logs/tunnel-origins   # "service url" per line, read by the watchdog
 
@@ -32,8 +35,9 @@ U1=$(url_of tunnel); U2=$(url_of tunnel2)
 [ -n "$U1$U2" ] || { echo "No tunnel address found; check: $DC logs tunnel tunnel2"; exit 1; }
 printf 'tunnel %s\ntunnel2 %s\n' "$U1" "$U2" > "$STATE"
 ORIGINS=$(printf '%s,%s' "$U1" "$U2" | sed 's/^,//; s/,$//')
+[ -n "$DIRECT_HOST" ] && ORIGINS="https://$DIRECT_HOST,$ORIGINS"   # direct route first, tunnels as backup
 echo "Tunnels: $ORIGINS"
-CLOUDFLARE_API_TOKEN=$(grep '^CLOUDFLARE_API_TOKEN=' .env | cut -d= -f2- | tr -d '"'"'"' \r\n')
+CLOUDFLARE_API_TOKEN=$(envval CLOUDFLARE_API_TOKEN)
 export CLOUDFLARE_API_TOKEN
 docker run --rm -e CLOUDFLARE_API_TOKEN -v "$PWD/infra/worker":/w -w /w node:22-alpine \
   sh -c "npx -y wrangler@4.20.0 deploy --var TUNNEL_ORIGINS:$ORIGINS" 2>&1 | grep -E 'workers.dev|Uploaded|rror' || true

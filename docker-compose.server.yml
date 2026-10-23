@@ -1,0 +1,23 @@
+# Cloud server only (on top of docker-compose.public.yml): adds the direct HTTPS route (Caddy).
+#   docker compose -f docker-compose.yml -f docker-compose.public.yml -f docker-compose.server.yml up -d --build
+# Needs PUBLIC_DIRECT_HOST (e.g. 8-230-127-211.sslip.io) and ORIGIN_SHARED_SECRET in .env.
+services:
+  caddy:
+    image: caddy:2.8.4-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_DIRECT_HOST: ${PUBLIC_DIRECT_HOST:?set PUBLIC_DIRECT_HOST in .env}
+      ORIGIN_SHARED_SECRET: ${ORIGIN_SHARED_SECRET:?set ORIGIN_SHARED_SECRET in .env}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

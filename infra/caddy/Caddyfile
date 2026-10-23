@@ -1,0 +1,14 @@
+# Direct HTTPS route into the app on the cloud server (no tunnel). Free certificate via Let's Encrypt
+# for <ip-with-dashes>.sslip.io. Only our Cloudflare Worker may use it: it sends a shared secret header.
+{$PUBLIC_DIRECT_HOST} {
+	@worker header X-Placewise-Origin {$ORIGIN_SHARED_SECRET}
+	handle @worker {
+		reverse_proxy web:3000 {
+			header_up -X-Placewise-Origin
+			# the Worker passes the visitor's IP; the login rate limit reads CF-Connecting-IP
+			header_up CF-Connecting-IP {header.X-Placewise-Client-IP}
+			header_up -X-Placewise-Client-IP
+		}
+	}
+	respond "Not found" 404
+}

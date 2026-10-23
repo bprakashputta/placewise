@@ -9,7 +9,7 @@ mkdir -p logs
 LOG=logs/public-link-watch.log
 STATE=logs/tunnel-origins
 PUBLIC=https://placewise.bprakashputta.workers.dev/api/health
-caffeinate -dims -w $$ &          # no display/idle/disk/system sleep while this script is alive
+command -v caffeinate >/dev/null && caffeinate -dims -w $$ &   # Mac only: no sleep while this runs
 f1=0; f2=0
 say() { echo "$(date '+%F %T') $*" >> "$LOG"; }
 check() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$1/api/health" || echo 000; }
