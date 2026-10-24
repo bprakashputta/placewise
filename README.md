@@ -62,6 +62,7 @@ The demo runs on a Compute Engine VM (`placewise-vm`, e2-medium, standard/not Sp
 - Start / refresh: `./scripts/public-link.sh` on the server (detects `PUBLIC_DIRECT_HOST` and adds the server overlay). The watchdog runs as a systemd service (`infra/server/placewise-watch.service`), starts on boot.
 - Only the Mac **or** the server may run the watchdog, or they'd re-point the Worker at each other.
 - Cost: about $0.85/day; a $20 budget alert emails the owner. Delete the VM (and the `placewise-ip` address) when the demo is over.
+- **Auto-deploy:** every push or merge to `main` that passes CI is deployed by `.github/workflows/deploy.yml` → `scripts/deploy.sh` on the server: build while the old version serves, swap api/worker/web, verify (health, login, web, no restarts, public link), roll back automatically on failure ([ADR 020](docs/decisions/020-auto-deploy-main-to-cloud-server.md)). Re-run by hand: Actions → Deploy → Run workflow. Server log: `logs/deploy.log`; running commit: `logs/deployed-sha`. Secrets needed: `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_KNOWN_HOSTS`.
 
 ## Synthetic data (seed CLI)
 Runs in the on-demand `seed` tools container. `write`, `samples` and `job-orders` call Claude Haiku 5.5 and need `PLACEWISE_ANTHROPIC_TEST_API_KEY` (a full run costs under $1).
