@@ -13,10 +13,11 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
+from ..llm_cache import response_cache
+from ..llm_cost import cached_system, usage_cost
 from ..promptlib import load
 from .retrieve import Filters, Hit
 
-PRICES = {"claude-sonnet-5-5": (2.00, 10.00), "claude-haiku-5-5": (0.10, 0.50)}
 
 
 class QueryPlan(BaseModel):
@@ -40,16 +41,19 @@ _models: dict[tuple, object] = {}
 def _structured(model_id: str, schema):
     key = (model_id, schema.__name__)
     if key not in _models:
-        llm = ChatAnthropic(model=model_id, max_tokens=3000, max_retries=3, timeout=60)
+        # cache=: the same question over the same retrieved sections replays for $0
+        llm = ChatAnthropic(model=model_id, max_tokens=3000, max_retries=3, timeout=60, cache=response_cache())
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             _models[key] = llm.with_structured_output(schema, include_raw=True)
     return _models[key]
 
 
-def _cost(model: str, usage: dict) -> float:
-    pin, pout = PRICES.get(model, (0, 0))
-    return usage.get("input_tokens", 0) / 1e6 * pin + usage.get("output_tokens", 0) / 1e6 * pout
+def _usage(model: str, usage: dict) -> dict:
+    """Usage fields for logging: tokens, cache reads and the cost (cache-aware)."""
+    c = usage_cost(model, usage)
+    return {"cost_usd": c["usd"], "input_tokens": c["input_tokens"], "output_tokens": c["output_tokens"],
+            "cache_read": c["cache_read"], "response_cache": c["response_cache"]}
 
 
 async def understand(question: str) -> tuple[QueryPlan, dict]:
@@ -64,8 +68,7 @@ async def understand(question: str) -> tuple[QueryPlan, dict]:
     except Exception:  # degrade gracefully: no filters, search the raw question
         plan, usage = QueryPlan(search_query=question), {}
     plan.filters.license_codes = [c.upper().replace(" ", "") for c in plan.filters.license_codes]
-    return plan, {"model": p["model"], "cost_usd": _cost(p["model"], usage),
-                  "latency_ms": int((time.perf_counter() - t0) * 1000), **usage}
+    return plan, {"model": p["model"], "latency_ms": int((time.perf_counter() - t0) * 1000), **_usage(p["model"], usage)}
 
 
 def _norm(s: str) -> str:
@@ -98,7 +101,8 @@ async def answer(question: str, hits: list[Hit], names: dict[int, str], profiles
     sections = "\n\n".join(blocks)
     t0 = time.perf_counter()
     out = await _structured(p["model"], RagAnswer).ainvoke(
-        [SystemMessage(p["system"]), HumanMessage(p["user"].format(question=question[:2000], filters=filters_text,
+        # Tool schema + instructions are cached: follow-up questions within 5 minutes reuse them.
+        [cached_system(p["system"]), HumanMessage(p["user"].format(question=question[:2000], filters=filters_text,
                                                                    sections=sections))],
         config={"run_name": "answer_with_citations", "tags": ["rag"]})
     ans: RagAnswer = out.get("parsed") or RagAnswer(answer="I couldn't produce an answer this time. Please retry.")
@@ -113,5 +117,5 @@ async def answer(question: str, hits: list[Hit], names: dict[int, str], profiles
         else:
             dropped.append(f"citation to section {c.chunk_id} not found in retrieved text: {c.quote[:80]!r}")
     ans.citations = kept
-    return ans, {"model": p["model"], "cost_usd": _cost(p["model"], usage),
-                 "latency_ms": int((time.perf_counter() - t0) * 1000), **usage}, dropped
+    return ans, {"model": p["model"], "latency_ms": int((time.perf_counter() - t0) * 1000),
+                 **_usage(p["model"], usage)}, dropped

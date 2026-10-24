@@ -71,7 +71,8 @@ async def n_understand(s: AskState) -> AskState:
     if s.get("filters_override"):
         plan.filters = Filters(**s["filters_override"])
     await log_call("ask", "rag.understand", usage["model"], 1, usage.get("input_tokens", 0),
-                   usage.get("output_tokens", 0), usage["latency_ms"], usage["cost_usd"], "ok")
+                   usage.get("output_tokens", 0), usage["latency_ms"], usage["cost_usd"],
+                   "cache_hit" if usage.get("response_cache") else "ok", cached=usage.get("cache_read", 0))
     return {"plan": plan.model_dump(), "usage": {"understand": usage},
             "timings": {"understand_ms": int((time.perf_counter() - t0) * 1000)}}
 
@@ -115,7 +116,9 @@ async def n_answer(s: AskState) -> AskState:
                                        "; ".join(x for x in parts if x) or "none")
     await log_call("ask", "rag.answer", usage["model"], ANSWER_PROMPT_VERSION, usage.get("input_tokens", 0),
                    usage.get("output_tokens", 0), usage["latency_ms"], usage["cost_usd"],
-                   "invalid_output" if ans.answer.startswith("I couldn't produce") else "ok")
+                   "invalid_output" if ans.answer.startswith("I couldn't produce")
+                   else "cache_hit" if usage.get("response_cache") else "ok",
+                   cached=usage.get("cache_read", 0))
     return {"answer": ans.model_dump(), "dropped": dropped, "answer_chunks": top, "usage": {**s["usage"], "answer": usage},
             "timings": {**s["timings"], "answer_ms": int((time.perf_counter() - t0) * 1000)}}
 

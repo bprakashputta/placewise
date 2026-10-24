@@ -36,6 +36,7 @@ Measured with `python -m placewise.evals.retrieval` on the synthetic dataset (Oc
 - **No contact details:** email and phone are never stored in the searchable sections or in `blind_text`, so an answer can't leak them.
 - **Rendering:** answers are Markdown, rendered without raw HTML, images or external links, so injected resume text can't make the browser fetch an attacker's URL.
 - **Spend:** every call is logged in `llm_calls` with tokens, latency and cost, and a daily spend cap blocks new calls with a 429. One question costs about $0.03.
+- **Caching ([ADR 021](../decisions/021-claude-cost-caching.md)):** the answer prompt's instructions and tool schema are prompt-cached (follow-ups within 5 minutes pay 5% for that part), and an identical question over the same retrieved sections replays from the LangChain response cache in Postgres for $0 (`status='cache_hit'`).
 - **Validation:** questions must be 3–2000 characters after trimming. Filters are fixed columns with bound parameters.
 
 ## Conversational Ask (Block 7, ADR 018)

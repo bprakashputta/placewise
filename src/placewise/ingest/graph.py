@@ -99,7 +99,8 @@ async def do_extract(state: IngestState) -> IngestState:
     await spend_check()
     ex = await extract(state["clean_text"], model_id=model, run_name="extract_profile", tags=["ingest"])
     await log_call(ref, "ingest.extract", ex.model, PROMPT_VERSION, ex.input_tokens, ex.output_tokens, ex.latency_ms,
-                   ex.cost_usd, "ok" if ex.profile else "invalid_output", "; ".join(ex.problems) or None)
+                   ex.cost_usd, "ok" if ex.profile else "invalid_output", "; ".join(ex.problems) or None,
+                   cached=ex.cached_tokens)
     if ex.profile is None:
         raise RuntimeError(f"extraction failed: {ex.problems}")  # the worker retries with backoff
     await put_cached_extraction(sha, ex.model, PROMPT_VERSION, ex.profile.model_dump(), ex.cost_usd)

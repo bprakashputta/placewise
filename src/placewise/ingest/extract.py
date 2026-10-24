@@ -12,12 +12,11 @@ from dataclasses import dataclass, field
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from ..llm_cost import cached_system, usage_cost
 from ..promptlib import load
 from .schema import ExtractedProfile
 
 PROMPT_NAME, PROMPT_VERSION = "ingest_extract_profile", 1
-# USD per 1M tokens (input, output), platform.claude.com/docs pricing, checked 2026-10-22
-PRICES = {"claude-sonnet-5-5": (2.00, 10.00), "claude-haiku-5-5": (0.10, 0.50), "claude-opus-5-5": (4.00, 20.00)}
 
 
 @dataclass
@@ -29,11 +28,8 @@ class Extraction:
     latency_ms: int = 0
     attempts: int = 0
     problems: list[str] = field(default_factory=list)
-
-    @property
-    def cost_usd(self) -> float:
-        pin, pout = PRICES.get(self.model, (0, 0))
-        return self.input_tokens / 1e6 * pin + self.output_tokens / 1e6 * pout
+    cost_usd: float = 0.0
+    cached_tokens: int = 0
 
 
 _models: dict[str, object] = {}
@@ -56,7 +52,8 @@ async def extract(resume_text: str, model_id: str | None = None, run_name: str =
     p = load(PROMPT_NAME, PROMPT_VERSION)
     model_id = model_id or p["model"]
     res = Extraction(profile=None, model=model_id)
-    messages = [SystemMessage(p["system"]), HumanMessage(p["user"].format(resume_text=resume_text[:30000]))]
+    # Tool schema + instructions are the same for every resume: cached across a batch of uploads.
+    messages = [cached_system(p["system"]), HumanMessage(p["user"].format(resume_text=resume_text[:30000]))]
     t0 = time.perf_counter()
     for attempt in range(1, max_attempts + 1):
         res.attempts = attempt
@@ -70,9 +67,11 @@ async def extract(resume_text: str, model_id: str | None = None, run_name: str =
             if status is not None and 400 <= status < 500 and status != 429:
                 break
             continue
-        u = getattr(out["raw"], "usage_metadata", None) or {}
-        res.input_tokens += u.get("input_tokens", 0)
-        res.output_tokens += u.get("output_tokens", 0)
+        c = usage_cost(model_id, getattr(out["raw"], "usage_metadata", None))
+        res.input_tokens += c["input_tokens"]
+        res.output_tokens += c["output_tokens"]
+        res.cached_tokens += c["cache_read"]
+        res.cost_usd += c["usd"]
         if out.get("parsed") is not None:
             res.profile = out["parsed"]
             res.problems = []
