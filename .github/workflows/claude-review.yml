@@ -1,5 +1,6 @@
 # Automated AI code review on every pull request (Claude Code GitHub Action).
-# Requires: the Claude GitHub App installed on this repo, and the ANTHROPIC_API_KEY repo secret.
+# Requires: the Claude GitHub App installed on this repo, and the CLAUDE_CODE_OAUTH_TOKEN repo secret
+# (from `claude setup-token`): reviews run on the owner's Claude subscription instead of API credits.
 name: Claude Code Review
 
 on:
@@ -22,7 +23,7 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}   # Claude subscription, not API credits
           track_progress: true
           prompt: |
             REPO: ${{ github.repository }}
