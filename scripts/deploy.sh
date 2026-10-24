@@ -121,7 +121,7 @@ roll_out() {  # $1 = commit; build first (old containers keep serving), then swa
 
 # Docs-only change (docs/ or *.md): update the checkout, check the site, no restart.
 if [ "$PREV" != "$TARGET" ] && git diff --quiet "$PREV" "$TARGET" -- . ':(exclude)docs' ':(exclude)*.md'; then
-  git -c advice.detachedHead=false checkout -q --force "$TARGET"
+  git -c advice.detachedHead=false checkout -q --force "$TARGET" || { say "git checkout $TARGET failed"; exit 1; }
   if out=$(verify); then
     echo "$TARGET" > logs/deployed-sha
     say "OK: $TARGET is live (docs only, no restart)"
