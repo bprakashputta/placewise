@@ -44,7 +44,15 @@ fi
 
 verify() {  # all checks must pass; prints the first failure
   # 1. api reports healthy (it runs migrations on start)
-  i=0; while [ "$(docker inspect -f '{{.State.Health.Status}}' "$($DC ps -q api)" 2>/dev/null)" != healthy ]; do
+  # fail fast: a crash, restart or "unhealthy" means the new version is broken, no need to wait it out
+  i=0
+  while :; do
+    st=$(docker inspect -f '{{.State.Status}} {{.RestartCount}} {{.State.Health.Status}}' "$($DC ps -aq api)" 2>/dev/null || echo "missing 0 none")
+    case "$st" in
+      "running 0 healthy") break ;;
+      "running 0 starting") ;;
+      *) echo "api is not starting cleanly ($st): $($DC logs --tail 3 api 2>&1 | tr '\n' ' ' | cut -c1-300)"; return 1 ;;
+    esac
     i=$((i + 1)); [ $i -gt 60 ] && { echo "api never became healthy"; return 1; }; sleep 3
   done
   # 2. health endpoint: api + database ok
