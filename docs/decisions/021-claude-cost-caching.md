@@ -14,10 +14,11 @@ The owner's Claude credits drained faster than expected. The app's own log (`llm
    - **Ask answers:** shared across questions asked within 5 minutes.
 3. **A LangChain response cache in Postgres** (`llm_cache.PostgresLLMCache`, a LangChain `BaseCache` passed as `ChatAnthropic(cache=...)`, migration 008). An identical request returns the stored response for $0.
    - **Used for:** match scoring, the job order builder, Ask answers, question understanding and routing.
-   - **Never stores** responses without a tool call or cut off at `max_tokens`.
-   - **Expiry:** entries expire after `LLM_RESPONSE_CACHE_DAYS` (default 30; 0 turns it off).
+   - **Never stores** a response that isn't a complete, valid answer: no tool call, cut off at `max_tokens`, or arguments that fail the expected Pydantic schema. A malformed answer can't be replayed (PR #7 review).
+   - **Expiry and cleanup:** entries expire after `LLM_RESPONSE_CACHE_DAYS` (default 7; 0 turns it off). Expired rows are deleted at api startup and hourly by the worker.
+   - **What it holds:** derived resume text. The request side includes the anonymized profile and job order; the stored response holds the model's quotes and summaries, and Ask answers include candidate names. It never holds contact details, which stay out of blind text and searchable sections. Rows aren't linked to a candidate, so deleting a resume leaves its cached responses until they expire (at most 7 days).
    - **Logging:** hits are logged as `status='cache_hit'` at $0.
-4. **One cost function** (`llm_cost.usage_cost`) replaces four copies. It prices cache writes (1.25×), cache reads (0.05× Sonnet/Opus 5.5, 0.1× Haiku) and replayed responses ($0), and logs cached tokens.
+4. **One cost function** (`llm_cost.usage_cost`) replaces four copies. It prices cache writes (1.25×), cache reads (0.05× Sonnet/Opus 5.5, 0.1× Haiku) and replayed responses ($0). `llm_calls.cached_tokens` records cache **reads**; cache writes are included in `cost_usd` but not counted separately.
 
 ## Measured (2026-10-24, on the owner's Mac copy)
 | | Before | After |

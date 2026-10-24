@@ -9,14 +9,21 @@ Used for match scoring, the job order builder, Ask answers, question understandi
 Re-running a match on the same job order, or asking the same question about the same results, then costs
 nothing and returns the same verdicts. Resume extraction has its own content-hash cache (extraction_cache).
 
-Only complete, well-formed responses are stored (a tool call present, not cut off at max_tokens), so a
-failed answer is never replayed. Cache errors are logged and ignored: the call simply goes to the API.
+Only complete answers that pass the expected Pydantic schema are stored (right tool, valid arguments,
+not cut off at max_tokens), so a failed or malformed answer is never replayed.
+
+What it holds: derived resume text (the anonymized profile and job order in the keys' source, the model's
+quotes and summaries in the values; Ask answers also include candidate names). Never contact details,
+which are kept out of blind text and the searchable sections. Rows expire after LLM_RESPONSE_CACHE_DAYS
+(default 7) and are deleted by purge_expired() at api startup and hourly in the worker. Cache errors are logged and ignored: the call simply goes to the API.
 A hit is visible in usage_metadata as total_cost == 0 (set by LangChain), and logged as status 'cache_hit'.
 """
 import hashlib
 import logging
 import warnings
 from typing import Any, Sequence
+
+from pydantic import BaseModel, ValidationError
 
 from langchain_core.caches import BaseCache
 from langchain_core.load import dumps, loads
@@ -32,24 +39,34 @@ def _key(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
 
-def cacheable(gens: Sequence[Generation]) -> bool:
-    """Store only complete structured answers: every generation has a tool call and wasn't cut off."""
+def cacheable(gens: Sequence[Generation], schema: type[BaseModel] | None = None) -> bool:
+    """Store only complete structured answers: a tool call, not cut off, and (given the schema) arguments
+    that validate, so a malformed answer can't be replayed for days."""
     if not gens:
         return False
     for g in gens:
         if not isinstance(g, ChatGeneration):
             return False
         msg = g.message
-        if not getattr(msg, "tool_calls", None):
+        calls = getattr(msg, "tool_calls", None)
+        if not calls:
             return False
         if (msg.response_metadata or {}).get("stop_reason") == "max_tokens":
             return False
+        if schema is not None:
+            if calls[0].get("name") != schema.__name__:
+                return False
+            try:
+                schema.model_validate(calls[0].get("args") or {})
+            except ValidationError:
+                return False
     return True
 
 
 class PostgresLLMCache(BaseCache):
-    def __init__(self, ttl_days: int):
+    def __init__(self, ttl_days: int, schema: type[BaseModel] | None = None):
         self.ttl_days = ttl_days
+        self.schema = schema   # the structured-output model; answers must validate to be stored
 
     # The app only uses async calls (ainvoke); the sync interface is a no-op, i.e. always a miss.
     def lookup(self, prompt: str, llm_string: str) -> Any:
@@ -79,7 +96,7 @@ class PostgresLLMCache(BaseCache):
             return None
 
     async def aupdate(self, prompt: str, llm_string: str, return_val: Any) -> None:
-        if not cacheable(return_val):
+        if not cacheable(return_val, self.schema):
             return
         try:
             async with pool().connection() as conn:
@@ -96,7 +113,16 @@ class PostgresLLMCache(BaseCache):
             await conn.execute("DELETE FROM llm_response_cache")
 
 
-def response_cache() -> PostgresLLMCache | bool:
+def response_cache(schema: type[BaseModel] | None = None) -> PostgresLLMCache | bool:
     """The cache to pass as ChatAnthropic(cache=...); False disables it (LLM_RESPONSE_CACHE_DAYS=0)."""
     days = get_settings().llm_response_cache_days
-    return PostgresLLMCache(days) if days > 0 else False
+    return PostgresLLMCache(days, schema) if days > 0 else False
+
+
+async def purge_expired() -> int:
+    """Delete expired rows (lookups already ignore them; this keeps derived resume text from lingering)."""
+    days = max(get_settings().llm_response_cache_days, 0)
+    async with pool().connection() as conn:
+        cur = await conn.execute("DELETE FROM llm_response_cache WHERE created_at < now() - make_interval(days => %s)",
+                                 (days,))
+        return cur.rowcount

@@ -35,6 +35,8 @@ async def lifespan(app: FastAPI):
     await ensure_demo_users()
     from .matching.engine import fail_interrupted_runs
     await fail_interrupted_runs()
+    from .llm_cache import purge_expired
+    await purge_expired()
     yield
     await close_pool()
 

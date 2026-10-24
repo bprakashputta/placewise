@@ -83,3 +83,20 @@ def test_a_replayed_response_costs_nothing():
     c = usage_cost("claude-sonnet-5-5", u)
     assert c["usd"] == 0 and c["response_cache"] is True
     assert usage_cost("claude-sonnet-5-5", {"input_tokens": 2000, "output_tokens": 600})["response_cache"] is False
+
+
+def test_malformed_structured_answer_is_not_cached():
+    from pydantic import BaseModel
+
+    class MatchAssessment(BaseModel):   # same name as the tool, a required field
+        summary: str
+        score_hint: int
+
+    assert not cacheable([_gen()], MatchAssessment)        # args {"summary": "ok"}: missing score_hint
+    good = ChatGeneration(message=AIMessage(content="", tool_calls=[{"name": "MatchAssessment", "id": "t",
+        "args": {"summary": "ok", "score_hint": 3}, "type": "tool_call"}], response_metadata={"stop_reason": "tool_use"}))
+    assert cacheable([good], MatchAssessment)
+
+    class Other(BaseModel):
+        summary: str
+    assert not cacheable([good], Other)                     # a different tool name never matches

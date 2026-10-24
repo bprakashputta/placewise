@@ -67,7 +67,7 @@ def _structured(model_id: str, schema):
     if (model_id, schema.__name__) not in _models:
         # cache=: identical requests (same job order + same candidate, or same notes) replay for $0
         llm = ChatAnthropic(model=model_id, max_tokens=3000, max_retries=6, timeout=90,   # backs off on 429
-                            cache=response_cache())
+                            cache=response_cache(schema))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             _models[(model_id, schema.__name__)] = llm.with_structured_output(schema, include_raw=True)

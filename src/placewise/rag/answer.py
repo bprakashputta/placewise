@@ -19,7 +19,6 @@ from ..promptlib import load
 from .retrieve import Filters, Hit
 
 
-
 class QueryPlan(BaseModel):
     filters: Filters = Field(default_factory=Filters)
     search_query: str
@@ -42,7 +41,8 @@ def _structured(model_id: str, schema):
     key = (model_id, schema.__name__)
     if key not in _models:
         # cache=: the same question over the same retrieved sections replays for $0
-        llm = ChatAnthropic(model=model_id, max_tokens=3000, max_retries=3, timeout=60, cache=response_cache())
+        llm = ChatAnthropic(model=model_id, max_tokens=3000, max_retries=3, timeout=60,
+                            cache=response_cache(schema))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             _models[key] = llm.with_structured_output(schema, include_raw=True)

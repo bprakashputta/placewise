@@ -1,7 +1,7 @@
 -- 008: LangChain response cache (src/placewise/llm_cache.py). An identical Claude request (same model,
 -- settings, tool schema and messages) returns the stored response for $0 instead of calling the API.
 -- Keys are SHA-256 hashes of LangChain's prompt and llm strings; entries expire after
--- LLM_RESPONSE_CACHE_DAYS (default 30). A prompt version change produces new keys automatically.
+-- LLM_RESPONSE_CACHE_DAYS (default 7; expired rows are deleted at api startup and hourly). A prompt version change produces new keys automatically.
 CREATE TABLE IF NOT EXISTS llm_response_cache (
     prompt_key  text NOT NULL,
     llm_key     text NOT NULL,

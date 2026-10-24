@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     voyage_api_key: SecretStr | None = None
 
     daily_llm_spend_cap_usd: float = 10.0
-    llm_response_cache_days: int = 30   # LangChain response cache in Postgres (llm_cache.py); 0 = off
+    llm_response_cache_days: int = 7   # LangChain response cache in Postgres (llm_cache.py); 0 = off
     cookie_secure: bool = False   # True when served over HTTPS (the public tunnel link)
     trust_cloudflare_ip: bool = False   # True only when traffic arrives through the Cloudflare tunnel
     # Cloud server: the Cloudflare Worker sends this secret with the visitor's IP (x-placewise-client-ip).

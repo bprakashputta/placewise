@@ -28,10 +28,10 @@ from pydantic import BaseModel, Field
 from ..db import pool
 from ..ingest.spend import check as spend_check
 from ..ingest.spend import log_call
+from ..llm_cost import usage_cost
 from ..matching.engine import hard_filters
 from ..matching.schema import JobSpec
 from ..promptlib import load
-from ..llm_cost import usage_cost
 from .answer import _structured
 from .graph import ask as run_rag
 
