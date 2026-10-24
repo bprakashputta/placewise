@@ -5,6 +5,7 @@
 #   ./scripts/public-link.sh                    full stack + both tunnels
 #   ./scripts/public-link.sh --tunnel-only      recreate both tunnels (app keeps running)
 #   ./scripts/public-link.sh --replace tunnel2  recreate just one tunnel, keep the other serving
+#   ./scripts/public-link.sh --repoint          only redeploy the Worker for the running tunnels
 set -eu
 cd "$(dirname "$0")/.."
 DC="docker compose -f docker-compose.yml -f docker-compose.public.yml"
@@ -17,6 +18,7 @@ STATE=logs/tunnel-origins   # "service url" per line, read by the watchdog
 case "${1:-}" in
   --tunnel-only) $DC up -d --force-recreate tunnel tunnel2; FRESH="tunnel tunnel2" ;;
   --replace)     $DC up -d --force-recreate "$2"; FRESH="$2" ;;
+  --repoint)     FRESH="" ;;   # no container changes: redeploy the Worker for the running tunnels (used by deploy.sh)
   *)             $DC up -d --build; FRESH="tunnel tunnel2" ;;
 esac
 
