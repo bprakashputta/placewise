@@ -91,6 +91,7 @@ verify() {  # all checks must pass; prints the first failure
   #    (db and caddy aren't recreated, so an old restart of theirs says nothing about this deploy)
   sleep 20
   for svc in $APP db caddy; do
+    [ -n "$($DC ps -aq "$svc")" ] || { echo "$svc has no container"; return 1; }
     for id in $($DC ps -aq "$svc"); do
       st=$(docker inspect -f '{{.State.Status}} {{.RestartCount}}' "$id")
       case " $APP " in *" $svc "*) want="running 0" ;; *) want="running" ; st=${st%% *} ;; esac

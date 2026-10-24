@@ -9,6 +9,7 @@ const RETRY_ALWAYS = new Set([530]); // tunnel not connected: the request never 
 const RETRY_IDEMPOTENT = new Set([502, 503, 504, 520, 521, 522, 523, 524]);
 const IDEMPOTENT = new Set(["GET", "HEAD", "OPTIONS"]);
 const ROUNDS = 3;
+const FAST_FAIL_MS = 1000; // a connection failure this quick can't have delivered the request
 const ROUND_PAUSE_MS = [0, 1500, 4000];
 
 export default {
@@ -56,6 +57,7 @@ export default {
           h.set("x-placewise-client-ip", request.headers.get("cf-connecting-ip") || "");
         }
         let res;
+        const tried = Date.now();
         try {
           res = await fetch(new URL(incoming.pathname + incoming.search, origin), {
             method: request.method,
@@ -65,9 +67,11 @@ export default {
           });
         } catch (e) {
           lastErr = `unreachable: ${e?.message ?? e}`;
-          // An exception doesn't prove the app never got the request, so only repeat safe methods.
-          // A POST (match run, approval) is retried only on 530, which means it never reached the app.
-          if (idempotent) continue;
+          // An exception doesn't always prove the app never got the request, so a POST (match run, approval)
+          // moves on to the next route only if the attempt failed fast: a refused connection or TLS failure
+          // (e.g. Caddy down) fails in milliseconds, before any request could reach the app. A slow failure
+          // might have reached the app, so it isn't repeated.
+          if (idempotent || Date.now() - tried < FAST_FAIL_MS) continue;
           log(502, `not retried (${request.method}): ${lastErr}`, { attempts });
           return new Response(JSON.stringify({ detail: "Placewise couldn't be reached. Please try again." }), {
             status: 502, headers: { "content-type": "application/json", "cache-control": "no-store" },

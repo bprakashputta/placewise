@@ -13,7 +13,7 @@ envval() { grep "^$1=" .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'"' \r\n'; }
 DIRECT_HOST=$(envval PUBLIC_DIRECT_HOST)   # set only on the cloud server
 [ -n "$DIRECT_HOST" ] && DC="$DC -f docker-compose.server.yml"
 mkdir -p logs
-STATE=logs/tunnel-origins
+STATE=logs/tunnel-origins   # "service url" per line, read by the watchdog
 # one Worker update at a time (the watchdog and deploy.sh both call this)
 exec 8>logs/public-link.lock
 flock -w 300 8 || { echo "another public-link run is still going"; exit 1; }   # "service url" per line, read by the watchdog
