@@ -6,12 +6,21 @@ An AI layer for A/E/C (Architecture, Engineering & Construction) recruiting. It 
 
 **Stack:** Next.js · FastAPI · LangChain · LangGraph · LangSmith · Claude · Voyage AI · Postgres + pgvector · n8n · Docker Compose
 
-## Current status: Block 2 (Ingest pipeline)
-- **Block 0 (Foundation):** three containers start with one command and a **System status** page shows whether the API, the database (with pgvector) and LangSmith are connected. Details: [`docs/modules/foundation.md`](docs/modules/foundation.md).
-- **Block 1 (Synthetic data):** a fully fake A/E/C candidate pool with a known answer key: **597 resumes** (349 PDF, 190 DOCX, 58 TXT, including image-only, corrupt, hidden-injection and duplicate files), **15 job orders** with messy recruiter notes, and a relevance key. Details: [`docs/modules/synthetic-data.md`](docs/modules/synthetic-data.md).
-- **Block 2 (Ingest pipeline):** resumes become searchable candidates. A LangGraph pipeline per resume: dedupe by file hash → parse and screen without AI (hidden text, prompt injection, two-column PDFs, scans) → **Claude Sonnet 5.5** structured extraction (cached, spend-capped) → **code validation** (credential quotes must exist in the resume, years computed from dates) → section chunks embedded with **Voyage** and stored in one transaction. Workers pull jobs from a Postgres `SKIP LOCKED` queue with retries, backoff and crash recovery. On all 597 seed resumes: routing 597/597, licenses+state 99.7%, years MAE 0.04, 563 = 563 people, about $12 total. Details: [`docs/modules/ingest.md`](docs/modules/ingest.md).
+## Current status
+**Live demo:** https://placewise.bprakashputta.workers.dev (seeded with synthetic candidates; you can upload your own resumes to try the pipeline; ask the owner for a login). Runs on an always-on Google Cloud VM and is redeployed automatically from `main` ([Cloud server](#cloud-server-google-cloud-vm-always-on), [ADR 020](docs/decisions/020-auto-deploy-main-to-cloud-server.md)).
 
-There is no recruiter UI for candidates yet: the portal shell and login come in Block 3. Today the candidates are available through the API.
+| Block | What works today | Details |
+|---|---|---|
+| 0 Foundation | Everything in Docker Compose; Admin → System status checks the API, database (pgvector) and LangSmith | [foundation](docs/modules/foundation.md) |
+| 1 Synthetic data | 597 fake A/E/C resumes (PDF/DOCX/TXT, incl. scans, corrupt, hidden-injection, duplicates), 15 job orders, an answer key | [synthetic data](docs/modules/synthetic-data.md) |
+| 2 Ingest | LangGraph per resume: dedupe → parse + screen → Claude extraction → code validation → Voyage embeddings; Postgres queue + workers | [ingest](docs/modules/ingest.md) |
+| 3–4 Portal, job orders | Login (admin / recruiter), Candidates, notes → structured job order with clarifying questions | [PLAN](docs/PLAN.md) |
+| 5 Retrieval + Ask | Hard filters + hybrid search + rerank (recall@10 89%, precision@10 98%); answers cite resume lines | [Ask (RAG)](docs/modules/rag.md) |
+| 6 Matching + approvals | Evidence-backed scoring (submit precision 97.6%), shortlist, approve/reject | [PLAN](docs/PLAN.md) |
+| 7 Conversational Ask | Message routing, saved chats, follow-ups, "Ask about this role" | [ADR 018](docs/decisions/018-conversational-ask-routing-and-threads.md) |
+| 9 Public link + ops (part) | Cloudflare Worker → cloud server, failover, alerts, auto-deploy with rollback | [Public demo link](#public-demo-link-cloudflare-quick-tunnel) |
+
+Not built yet: submittal/outreach drafts, n8n workflows (Block 8), the tool-using recruiter agent, LangSmith datasets and the demo script.
 
 ## Quick start
 Needs only Docker Desktop and git. Everything (db included) runs in containers.

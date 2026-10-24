@@ -119,6 +119,18 @@ roll_out() {  # $1 = commit; build first (old containers keep serving), then swa
   ./scripts/public-link.sh --repoint >> "$LOG" 2>&1 || { echo "Worker deploy failed"; return 1; }   # Worker code from this commit
 }
 
+# Docs-only change (docs/ or *.md): update the checkout, check the site, no restart.
+if [ "$PREV" != "$TARGET" ] && git diff --quiet "$PREV" "$TARGET" -- . ':(exclude)docs' ':(exclude)*.md'; then
+  git -c advice.detachedHead=false checkout -q --force "$TARGET" || { say "git checkout $TARGET failed"; exit 1; }
+  if out=$(verify); then
+    echo "$TARGET" > logs/deployed-sha
+    say "OK: $TARGET is live (docs only, no restart)"
+    exit 0
+  fi
+  say "docs-only update, but the running site failed its checks: $out"
+  exit 1
+fi
+
 say "deploy $TARGET (running: $PREV)"
 if out=$(roll_out "$TARGET" && verify); then
   echo "$TARGET" > logs/deployed-sha

@@ -1,6 +1,6 @@
 # Ask (RAG) and smart search
 
-**Status:** Block 5 (RAG), built and measured. Conversational Ask (message routing, saved conversations, follow-ups, job-order chats) is built in Block 7: [ADR 018](../decisions/018-conversational-ask-routing-and-threads.md). Backend measured; the chat UI with saved conversations is in progress.
+**Status:** Block 5 (RAG), built and measured. Conversational Ask (message routing, saved conversations, follow-ups, job-order chats) is built in Block 7: [ADR 018](../decisions/018-conversational-ask-routing-and-threads.md). Backend measured and the chat UI with saved conversations is built.
 
 The recruiter asks a question in plain English, for example "Texas PEs in DFW with drainage experience and 8+ years". Placewise answers from the resumes only, and every claim cites the resume line it came from.
 
@@ -55,7 +55,7 @@ The owner found the gap: the RAG graph is a straight line, so "Hey" ran a full c
 - **Routing:** a free keyword shortcut for obvious one-liners, otherwise Claude Haiku (`prompts/ask_route.v1.yaml`), which also rewrites follow-ups using the last 6 turns. If routing fails, the message is treated as a search.
 - **Conversations:** saved per user (`conversations`, `conversation_messages`, migration 006), optionally tied to a job order ("Ask about this role" starts with an intro message). Both messages are saved only after a successful reply. Another user's conversation returns 404. API: `docs/api-contract.md`, "Conversations".
 - **Memory:** our `conversation_messages` table, not LangGraph's checkpointer (reason in ADR 018).
-- **Measured:** routing eval 30/30 correct (`python -m placewise.evals.ask_routing`, $0.005).
+- **Measured:** routing eval 34/34 correct with router v2 (`python -m placewise.evals.ask_routing`, $0.007).
 - **Next:** 👍/👎 feedback linked to LangSmith traces, outcome signals (a candidate surfaced in a chat and later approved), and LangSmith datasets for routing and answers. Prompt changes ship only when the test scores hold or improve.
 
 ## Files

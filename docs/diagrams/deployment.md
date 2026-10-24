@@ -30,12 +30,27 @@ All long-running services use `restart: unless-stopped`.
 - The anonymous volumes keep the image's `node_modules` and `.next` from being hidden by the `./web` bind mount. After changing web dependencies: `docker compose up --build -V web`.
 - `WATCHPACK_POLLING=true` makes file watching reliable through Docker on macOS.
 
-## What becomes public later
-Today nothing is public: every published port binds to `127.0.0.1`.
-When the optional **tunnel** is added (Block 9, **Planned**), it will expose **only `web`**. The api stays reachable only through web's `/api/*` proxy, and the db stays internal. Auth (Block 3) must be in place first.
+## Public demo (cloud server)
+The public demo runs the **same Compose stack** on an always-on Google Cloud VM (`placewise-vm`, e2-medium, standard provisioning, `us-south1` Dallas), started with `docker-compose.yml` + `docker-compose.public.yml` + `docker-compose.server.yml`.
 
-| Port | Now | Later (with tunnel) |
+![Public demo: Cloudflare Worker routes to Caddy and two tunnels on the VM; GitHub CI then Deploy workflow runs scripts/deploy.sh](public-deployment.svg)
+
+*Source: [`src/public-deployment.d2`](src/public-deployment.d2).*
+
+| Piece | What it does |
+|---|---|
+| Cloudflare Worker (`infra/worker`) | The public address. Tries the direct route, then the two tunnels; retries routes that never reached the app (530/521–523/525/526), repeats a POST only then or after a fast connection failure; shows a self-reloading "Reconnecting…" page if everything is down. Workers Logs on. |
+| `caddy` (`docker-compose.server.yml`) | Direct HTTPS route on `<ip>.sslip.io` (Let's Encrypt). Answers 404 unless the request carries the Worker's secret header; passes the visitor's IP to the api. |
+| `tunnel`, `tunnel2` | Two Cloudflare quick tunnels (backup routes). |
+| Watchdog (`scripts/watch-public-link.sh`, systemd) | Every 20 s checks each tunnel; replaces one only on 530 / no connection; pauses during deploys. |
+| Deploy (`.github/workflows/deploy.yml` → `scripts/deploy.sh`) | After CI passes on `main`: build, swap api/worker/web, verify, roll back on failure ([ADR 020](../decisions/020-auto-deploy-main-to-cloud-server.md)). |
+| Alerts | Google Cloud uptime check (email after 2 minutes down) and a $20 budget alert. |
+
+What is reachable from the internet:
+
+| Port | Local (Mac) | Cloud server |
 |---|---|---|
-| web 3000 | localhost | **public via tunnel** |
-| api 8000 | localhost (dev docs) | localhost only / internal |
+| web 3000 | localhost | only through Caddy or the tunnels, both via the Worker |
+| api 8000 | localhost (dev docs) | localhost only; public traffic reaches it only through web's `/api/*` proxy |
 | db 5432 | internal only | internal only |
+| 443 / 80 | — | Caddy (404 without the Worker's secret) |

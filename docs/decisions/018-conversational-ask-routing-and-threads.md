@@ -1,6 +1,6 @@
 # 018: Conversational Ask: route messages first, keep separate conversations
 
-- **Status:** accepted and built (owner approved 2026-10-23: "fix the chat issues"); backend measured, UI in progress
+- **Status:** accepted and built (owner approved 2026-10-23: "fix the chat issues"); backend measured, chat UI built
 - **Date:** 2026-10-23
 
 ## Context
