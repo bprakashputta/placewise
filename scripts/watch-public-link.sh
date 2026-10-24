@@ -15,13 +15,17 @@ say() { echo "$(date '+%F %T') $*" >> "$LOG"; }
 check() { curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$1/api/health" || echo 000; }
 say "watcher started (pid $$), two-tunnel mode"
 while true; do
+  # a deploy restarts the app on purpose: don't judge the tunnels while one is running
+  if [ -e logs/deploy.lock ] && ! flock -n logs/deploy.lock true; then sleep 20; continue; fi
   u1=$(awk '$1=="tunnel"{print $2}' "$STATE" 2>/dev/null)
   u2=$(awk '$1=="tunnel2"{print $2}' "$STATE" 2>/dev/null)
   for svc in tunnel tunnel2; do
     if [ "$svc" = tunnel ]; then u=$u1; f=$f1; else u=$u2; f=$f2; fi
     code=000; [ -n "$u" ] && code=$(check "$u")
-    if [ "$code" = "200" ]; then
+    if [ "$code" != "530" ] && [ "$code" != "000" ]; then
+      # the tunnel reached the app; any other status is an app problem, not a tunnel problem
       [ "$f" -gt 0 ] && say "$svc healthy again"
+      [ "$code" = "200" ] || say "$svc reached the app but got $code (not replacing the tunnel)"
       f=0
     else
       f=$((f + 1)); say "$svc check failed ($code), strike $f"

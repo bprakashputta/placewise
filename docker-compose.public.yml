@@ -13,12 +13,12 @@ services:
       COOKIE_SECURE: "true"
       TRUST_CLOUDFLARE_IP: "true"
       PUBLIC_DEMO: "true"
-      DAILY_LLM_SPEND_CAP_USD: ${PUBLIC_DAILY_LLM_SPEND_CAP_USD:-30}
+      DAILY_LLM_SPEND_CAP_USD: ${PUBLIC_DAILY_LLM_SPEND_CAP_USD:-10}
     command: ["uvicorn", "placewise.main:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-keep-alive", "75"]
 
   worker:   # uploads are processed here: same spend cap as the api, or uploads would stop earlier
     environment:
-      DAILY_LLM_SPEND_CAP_USD: ${PUBLIC_DAILY_LLM_SPEND_CAP_USD:-30}
+      DAILY_LLM_SPEND_CAP_USD: ${PUBLIC_DAILY_LLM_SPEND_CAP_USD:-10}
 
   web:
     build:

@@ -16,8 +16,18 @@ DC="docker compose -f docker-compose.yml -f docker-compose.public.yml -f docker-
 APP="api worker web"
 REF=${DEPLOY_REF:-origin/main}
 
-say() { echo "$(date -u '+%F %T') $*" | tee -a "$LOG"; }
+say() {  # to the log, and to the caller if it's still connected (never fail if it isn't)
+  line="$(date -u '+%F %T') $*"
+  echo "$line" >> "$LOG"
+  echo "$line" 2>/dev/null || true
+}
 envval() { grep "^$1=" .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'"' \r\n'; }
+rawval() {  # value as written (keeps spaces and symbols), minus one pair of surrounding quotes
+  grep "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2- | sed 's/\r$//; s/^"\(.*\)"$/\1/; s/^'"'"'\(.*\)'"'"'$/\1/'
+}
+
+# A deploy must finish once started: an SSH drop or a closed pipe must not stop it halfway.
+trap '' HUP PIPE
 
 # one deploy at a time
 exec 9>logs/deploy.lock
@@ -29,7 +39,10 @@ TARGET=$(git rev-parse "${1:-$REF}^{commit}")
 if [ -n "${1:-}" ] && ! git merge-base --is-ancestor "$TARGET" "$REF"; then
   say "refusing $TARGET: not on $REF"; exit 1
 fi
-PREV=$(git rev-parse HEAD)
+# Roll back to the last VERIFIED commit, not whatever HEAD is (an interrupted deploy could leave HEAD
+# on an unverified commit).
+PREV=$(cat logs/deployed-sha 2>/dev/null || true)
+git cat-file -e "${PREV:-x}^{commit}" 2>/dev/null || PREV=$(git rev-parse HEAD)
 if [ "$PREV" != "$TARGET" ] && git merge-base --is-ancestor "$TARGET" "$PREV"; then
   say "skip: $TARGET is older than the running $PREV"; exit 0
 fi
@@ -59,9 +72,10 @@ verify() {  # all checks must pass; prints the first failure
   h=$(curl -s --max-time 10 http://127.0.0.1:8000/api/health || true)
   echo "$h" | grep -q '"ok":true' || { echo "api health not ok: $(echo "$h" | cut -c1-200)"; return 1; }
   # 3. login works and data is readable (no AI calls, no cost)
-  pw=$(envval PLACEWISE_DEMO_ADMIN_PASSWORD)
-  ck=$(curl -s --max-time 15 -D - -o /dev/null -H 'content-type: application/json' \
-       -d "{\"username\":\"admin\",\"password\":\"$pw\"}" http://127.0.0.1:8000/api/auth/login \
+  # JSON-escape the password and send the body on stdin (never in curl's argv)
+  pw=$(rawval PLACEWISE_DEMO_ADMIN_PASSWORD | sed 's/\\/\\\\/g; s/"/\\"/g')
+  ck=$(printf '{"username":"admin","password":"%s"}' "$pw" | curl -s --max-time 15 -D - -o /dev/null \
+       -H 'content-type: application/json' --data-binary @- http://127.0.0.1:8000/api/auth/login \
        | tr -d '\r' | sed -n 's/^[Ss]et-[Cc]ookie: \(pw_session=[^;]*\).*/\1/p')
   [ -n "$ck" ] || { echo "admin login failed"; return 1; }
   s=$(curl -s --max-time 15 -H "Cookie: $ck" http://127.0.0.1:8000/api/stats || true)
@@ -73,12 +87,14 @@ verify() {  # all checks must pass; prints the first failure
         -H "X-Placewise-Origin: $sec" "https://$host$p" || echo 000)
     [ "$c" = 200 ] || { echo "web $p returned $c"; return 1; }
   done
-  # 5. containers stay up (no crash loop) for 20 s
+  # 5. no crash loop for 20 s: the recreated app containers have never restarted; the rest are running
+  #    (db and caddy aren't recreated, so an old restart of theirs says nothing about this deploy)
   sleep 20
-  for svc in api worker web db caddy; do
-    for id in $($DC ps -q "$svc"); do
+  for svc in $APP db caddy; do
+    for id in $($DC ps -aq "$svc"); do
       st=$(docker inspect -f '{{.State.Status}} {{.RestartCount}}' "$id")
-      [ "$st" = "running 0" ] || { echo "$svc is '$st'"; return 1; }
+      case " $APP " in *" $svc "*) want="running 0" ;; *) want="running" ; st=${st%% *} ;; esac
+      [ "$st" = "$want" ] || { echo "$svc is '$st'"; return 1; }
     done
   done
   # 6. the public link answers
@@ -105,6 +121,15 @@ roll_out() {  # $1 = commit; build first (old containers keep serving), then swa
 say "deploy $TARGET (running: $PREV)"
 if out=$(roll_out "$TARGET" && verify); then
   echo "$TARGET" > logs/deployed-sha
+  # keep the forced command and the watchdog service in step with the repo
+  if ! cmp -s infra/server/placewise-deploy /usr/local/bin/placewise-deploy; then
+    sudo -n install -m 755 -o root -g root infra/server/placewise-deploy /usr/local/bin/placewise-deploy \
+      && say "updated /usr/local/bin/placewise-deploy" || say "WARNING: could not update placewise-deploy"
+  fi
+  if ! git diff --quiet "$PREV" "$TARGET" -- scripts/watch-public-link.sh infra/server/placewise-watch.service; then
+    sudo -n cp infra/server/placewise-watch.service /etc/systemd/system/ && sudo -n systemctl daemon-reload \
+      && sudo -n systemctl restart placewise-watch && say "restarted the watchdog" || say "WARNING: could not restart the watchdog"
+  fi
   docker image prune -f >/dev/null 2>&1 || true
   say "OK: $TARGET is live"
   exit 0

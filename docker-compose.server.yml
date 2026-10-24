@@ -2,6 +2,10 @@
 #   docker compose -f docker-compose.yml -f docker-compose.public.yml -f docker-compose.server.yml up -d --build
 # Needs PUBLIC_DIRECT_HOST (e.g. 8-230-127-211.sslip.io) and ORIGIN_SHARED_SECRET in .env.
 services:
+  api:   # trusts the Worker's x-placewise-client-ip only when it carries this secret (login rate limit)
+    environment:
+      ORIGIN_SHARED_SECRET: ${ORIGIN_SHARED_SECRET:?set ORIGIN_SHARED_SECRET in .env}
+
   caddy:
     image: caddy:2.8.4-alpine
     ports:

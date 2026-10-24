@@ -13,7 +13,10 @@ envval() { grep "^$1=" .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'"' \r\n'; }
 DIRECT_HOST=$(envval PUBLIC_DIRECT_HOST)   # set only on the cloud server
 [ -n "$DIRECT_HOST" ] && DC="$DC -f docker-compose.server.yml"
 mkdir -p logs
-STATE=logs/tunnel-origins   # "service url" per line, read by the watchdog
+STATE=logs/tunnel-origins
+# one Worker update at a time (the watchdog and deploy.sh both call this)
+exec 8>logs/public-link.lock
+flock -w 300 8 || { echo "another public-link run is still going"; exit 1; }   # "service url" per line, read by the watchdog
 
 case "${1:-}" in
   --tunnel-only) $DC up -d --force-recreate tunnel tunnel2; FRESH="tunnel tunnel2" ;;
@@ -41,6 +44,10 @@ ORIGINS=$(printf '%s,%s' "$U1" "$U2" | sed 's/^,//; s/,$//')
 echo "Tunnels: $ORIGINS"
 CLOUDFLARE_API_TOKEN=$(envval CLOUDFLARE_API_TOKEN)
 export CLOUDFLARE_API_TOKEN
-docker run --rm -e CLOUDFLARE_API_TOKEN -v "$PWD/infra/worker":/w -w /w node:22-alpine \
-  sh -c "npx -y wrangler@4.20.0 deploy --var TUNNEL_ORIGINS:$ORIGINS" 2>&1 | grep -E 'workers.dev|Uploaded|rror' || true
+if ! out=$(docker run --rm -e CLOUDFLARE_API_TOKEN -v "$PWD/infra/worker":/w -w /w node:22-alpine \
+    sh -c "npx -y wrangler@4.20.0 deploy --var TUNNEL_ORIGINS:$ORIGINS" 2>&1); then
+  echo "Worker deploy FAILED:"; echo "$out" | grep -v "npm notice" | tail -15
+  exit 1
+fi
+echo "$out" | grep -E 'workers.dev|Uploaded' || true
 echo "Public link: https://placewise.bprakashputta.workers.dev"

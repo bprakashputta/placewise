@@ -46,10 +46,11 @@ export default {
       if (ROUND_PAUSE_MS[round]) await new Promise((r) => setTimeout(r, ROUND_PAUSE_MS[round]));
       for (const origin of origins) {
         attempts++;
-        // The direct route to the cloud server (not a trycloudflare tunnel) needs our shared secret,
-        // and gets the visitor's IP in a header Caddy maps to CF-Connecting-IP.
+        // Every route gets our shared secret and the visitor's IP. The direct route needs the secret to get
+        // past Caddy; on the tunnel routes Cloudflare may replace CF-Connecting-IP with the Worker's own
+        // address, so the api trusts x-placewise-client-ip when the secret matches (login rate limit).
         let h = headers;
-        if (env.ORIGIN_SECRET && !origin.includes(".trycloudflare.com")) {
+        if (env.ORIGIN_SECRET) {
           h = new Headers(headers);
           h.set("x-placewise-origin", env.ORIGIN_SECRET);
           h.set("x-placewise-client-ip", request.headers.get("cf-connecting-ip") || "");
@@ -64,7 +65,13 @@ export default {
           });
         } catch (e) {
           lastErr = `unreachable: ${e?.message ?? e}`;
-          continue; // connection failed before reaching the app: safe to try the next tunnel
+          // An exception doesn't prove the app never got the request, so only repeat safe methods.
+          // A POST (match run, approval) is retried only on 530, which means it never reached the app.
+          if (idempotent) continue;
+          log(502, `not retried (${request.method}): ${lastErr}`, { attempts });
+          return new Response(JSON.stringify({ detail: "Placewise couldn't be reached. Please try again." }), {
+            status: 502, headers: { "content-type": "application/json", "cache-control": "no-store" },
+          });
         }
         const retryable = RETRY_ALWAYS.has(res.status) || (idempotent && RETRY_IDEMPOTENT.has(res.status));
         if (retryable) {
