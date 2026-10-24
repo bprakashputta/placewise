@@ -337,7 +337,7 @@ const HEADER_PROPS = {
 /** Admin-only, like the other admin pages: recruiters get the "Admins only" state without any request. */
 export function TestDataView() {
   const { user, loading } = useUser();
-  if (!user && !loading) {   // /api/auth/me failed with something other than 401 (e.g. the api restarting)
+  if (!user && !loading) {   // /api/auth/me finished without a user (e.g. the api restarting); on a 401 this shows briefly before the redirect to /login
     return (
       <div className="space-y-6">
         <PageHeader {...HEADER_PROPS} />
