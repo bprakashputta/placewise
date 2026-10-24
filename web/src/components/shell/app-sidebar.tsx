@@ -171,7 +171,7 @@ export function AppSidebar() {
       <SidebarFooter className="gap-2 p-3 group-data-[collapsible=icon]:p-2">
         <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground group-data-[collapsible=icon]:hidden">
           <span className="size-1.5 rounded-full bg-warning" aria-hidden="true" />
-          Synthetic demo data only
+          Demo · seeded with synthetic data
         </p>
         <UserCard />
       </SidebarFooter>

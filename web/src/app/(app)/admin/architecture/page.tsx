@@ -1,12 +1,16 @@
 import {
   BadgeCheck,
+  BellRing,
   Boxes,
   BrainCircuit,
   Calculator,
   CircleDollarSign,
+  Cloud,
+  Database,
   EyeOff,
   FileScan,
   FileText,
+  GitMerge,
   Hand,
   Layers,
   ListFilter,
@@ -14,14 +18,17 @@ import {
   Monitor,
   Network,
   Quote,
+  Repeat,
+  Rocket,
   Scale,
   Search,
   Server,
-  ShieldCheck,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   UserCheck,
   Workflow,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -81,6 +88,70 @@ const ASK_ROUTES: { title: string; body: string; icon: LucideIcon; tone: Tone | 
   { title: "Verified citations", body: "Every quote must appear word for word in the cited resume section, or code drops it.", icon: Quote, tone: "tamper" },
 ];
 
+const DELIVERY: { title: string; body: string; icon: LucideIcon; tone: Tone }[] = [
+  {
+    title: "Public link with failover",
+    body: "A Cloudflare Worker is the public address. It tries a direct HTTPS route first, then two backup tunnels; if all are down it shows a page that reloads itself.",
+    icon: Cloud,
+    tone: "info",
+  },
+  {
+    title: "Always-on cloud server",
+    body: "A Google Cloud VM in Dallas runs the same Docker Compose stack as local development. Only the web app is reachable; the database is never exposed.",
+    icon: Server,
+    tone: "brand",
+  },
+  {
+    title: "Auto-deploy from main",
+    body: "When tests pass on main, GitHub deploys that commit: build, swap containers, check health, login, pages and the public link, and roll back on any failure.",
+    icon: Rocket,
+    tone: "success",
+  },
+  {
+    title: "Monitoring and alerts",
+    body: "An uptime check emails the owner after 2 minutes down, plus a budget alert. Every request is in Cloudflare logs; every AI run is traced in LangSmith.",
+    icon: BellRing,
+    tone: "warning",
+  },
+];
+
+// width/height = the SVG's viewBox; update them if the diagram is re-rendered.
+const DELIVERY_DIAGRAM: Diagram = {
+  src: "/diagrams/public-deployment.svg",
+  title: "How the live demo is hosted and deployed",
+  caption: "Cloudflare Worker → Caddy or a backup tunnel → the Docker stack on the VM; CI → Deploy workflow → verify or roll back.",
+  alt: "Public deployment: the browser reaches a Cloudflare Worker, which routes to Caddy or one of two tunnels on a Google Cloud VM running web, api, worker and Postgres; GitHub CI triggers a deploy workflow that runs the deploy script.",
+  width: 3383,
+  height: 576,
+};
+
+const COST: { title: string; body: string; icon: LucideIcon; tone: Tone }[] = [
+  {
+    title: "Prompt caching",
+    body: "Instructions and the job order are sent once per match run and reused for every candidate at 5% of the price. Measured: match runs about 20% cheaper, same quality.",
+    icon: Zap,
+    tone: "brand",
+  },
+  {
+    title: "Repeats are free",
+    body: "A LangChain response cache in Postgres answers an identical request again for $0 in about a second (e.g. re-running a match). Only valid answers are stored, for 7 days.",
+    icon: Repeat,
+    tone: "success",
+  },
+  {
+    title: "Right-sized models",
+    body: "Claude Haiku routes chat messages and reads questions for a fraction of a cent; Sonnet does the reading, judging and writing where quality matters.",
+    icon: BrainCircuit,
+    tone: "info",
+  },
+  {
+    title: "Every call logged and capped",
+    body: "Each AI call is logged with tokens, time and cost (the AI Costs page), and a daily spend cap stops new calls once it's reached.",
+    icon: Database,
+    tone: "warning",
+  },
+];
+
 const ASK_DIAGRAMS: Diagram[] = [
   {
     src: "/diagrams/ask-conversation.svg",
@@ -128,9 +199,9 @@ const GALLERY: Diagram[] = [
   {
     src: "/diagrams/data-model.svg",
     title: "Resume data model",
-    caption: "People, resume versions, profiles with evidence, searchable sections and the AI cost log.",
-    alt: "Data model: people, resume files, profiles, resume sections with embeddings, ingest jobs, the extraction cache and the AI cost log.",
-    width: 2247,
+    caption: "People, resume versions, profiles with evidence, searchable sections, the AI cost log and caches.",
+    alt: "Data model: people, resume files, profiles, resume sections with embeddings, ingest jobs, the extraction cache, the AI cost log and the LangChain response cache.",
+    width: 2672,
     height: 1628,
   },
   {
@@ -142,11 +213,13 @@ const GALLERY: Diagram[] = [
     height: 692,
   },
   ...ASK_DIAGRAMS,
+  DELIVERY_DIAGRAM,
 ];
 
 const GALLERY_SPAN: Record<string, string> = {
   "/diagrams/architecture.svg": "xl:row-span-2",
   "/diagrams/app-data-model.svg": "sm:col-span-2",
+  "/diagrams/public-deployment.svg": "sm:col-span-2 xl:col-span-3",
 };
 
 const STACK: { group: string; icon: LucideIcon; items: { name: string; role: string }[] }[] = [
@@ -155,7 +228,7 @@ const STACK: { group: string; icon: LucideIcon; items: { name: string; role: str
     icon: Workflow,
     items: [
       { name: "LangGraph", role: "Ingest, Ask and match graphs" },
-      { name: "LangChain", role: "Model calls and structured output" },
+      { name: "LangChain", role: "Model calls, structured output, prompt and response caching" },
       { name: "LangSmith", role: "Tracing and evals" },
     ],
   },
@@ -197,7 +270,21 @@ const STACK: { group: string; icon: LucideIcon; items: { name: string; role: str
   {
     group: "Infra",
     icon: Boxes,
-    items: [{ name: "Docker Compose", role: "db, api, 3 workers, web" }],
+    items: [
+      { name: "Docker Compose", role: "Same stack locally and in the cloud" },
+      { name: "Google Cloud VM", role: "Always-on host (Dallas)" },
+      { name: "Cloudflare Worker", role: "Public link, failover, logs" },
+      { name: "Caddy", role: "Direct HTTPS route (Let's Encrypt)" },
+    ],
+  },
+  {
+    group: "Delivery",
+    icon: GitMerge,
+    items: [
+      { name: "GitHub Actions", role: "Tests, web build, auto-deploy" },
+      { name: "Claude Code review", role: "Automated review on every PR" },
+      { name: "Uptime + budget alerts", role: "Email to the owner" },
+    ],
   },
 ];
 
@@ -254,7 +341,8 @@ function Hero() {
         </p>
         <ul className="flex flex-wrap gap-2 pt-1 text-xs font-medium">
           <li className="rounded-full bg-brand-soft px-2.5 py-1 text-brand-strong">Personal project, built this week</li>
-          <li className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground ring-1 ring-border ring-inset">Synthetic data only</li>
+          <li className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground ring-1 ring-border ring-inset">Seeded with synthetic data</li>
+          <li className="rounded-full bg-info-soft px-2.5 py-1 text-info-strong">Live on Google Cloud, auto-deployed</li>
           <li className="rounded-full bg-success-soft px-2.5 py-1 text-success-strong">Nothing sends without approval</li>
         </ul>
       </div>
@@ -345,11 +433,66 @@ function AskSection() {
   );
 }
 
+function CardGrid({ items }: { items: { title: string; body: string; icon: LucideIcon; tone: Tone }[] }) {
+  return (
+    <ul className="grid gap-x-6 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((r) => (
+        <li key={r.title} className="flex gap-3 xl:flex-col xl:gap-2">
+          <IconTile icon={r.icon} tone={r.tone} size="sm" />
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-sm font-medium">{r.title}</p>
+            <p className="text-[13px] leading-relaxed text-muted-foreground">{r.body}</p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function DeliverySection() {
+  return (
+    <section aria-labelledby="delivery-heading" className="space-y-5">
+      <SectionHeading
+        id="delivery-heading"
+        eyebrow="Hosting"
+        title="Live, always on, deployed from main"
+        description="The demo runs the same containers as local development, on a server that never sleeps, and every change that passes the tests deploys itself."
+      />
+      <Card>
+        <CardContent className="space-y-6">
+          <CardGrid items={DELIVERY} />
+          <div className="border-t pt-5">
+            <DiagramCard d={DELIVERY_DIAGRAM} variant="wide" />
+          </div>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+function CostSection() {
+  return (
+    <section aria-labelledby="cost-heading" className="space-y-5">
+      <SectionHeading
+        id="cost-heading"
+        eyebrow="Cost"
+        title="Paying only for new work"
+        description="AI is the only real running cost, so every call is measured, shared context is cached, and repeated work is free."
+      />
+      <Card>
+        <CardContent>
+          <CardGrid items={COST} />
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
 function Gallery() {
   return (
     <section aria-labelledby="diagrams-heading" className="space-y-5">
       <SectionHeading id="diagrams-heading" eyebrow="Diagrams" title="Architecture diagrams" description="Click any diagram to open it full screen, zoom in and drag to pan." />
-      {/* 7 diagrams: the tall architecture diagram spans two rows and the wide portal model two columns, so the grid has no gaps. */}
+      {/* 8 diagrams: the tall architecture diagram spans two rows, the portal model two columns and the deployment diagram a full row. */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-flow-dense xl:grid-cols-3">
         {GALLERY.map((d) => (
           <DiagramCard key={d.src} d={d} className={cn(GALLERY_SPAN[d.src])} />
@@ -422,14 +565,16 @@ export default function ArchitecturePage() {
       <Hero />
       <Pipeline />
       <AskSection />
+      <DeliverySection />
+      <CostSection />
       <TrustRules />
       <EvalNumbers headingId="numbers-heading" showLink />
       <Gallery />
       <TechStack />
       <p className="flex items-start gap-2 border-t pt-6 text-xs text-muted-foreground">
         <Sparkles className="mt-px size-3.5 shrink-0" aria-hidden="true" />
-        A personal project built this week on synthetic data. Synthetic resumes are cleaner than real ones, so the numbers above are an optimistic upper
-        bound, not production results.
+        A personal project built this week. The numbers above were measured on the synthetic seed data, which is cleaner than real resumes, so treat
+        them as an optimistic upper bound, not production results.
       </p>
     </div>
   );

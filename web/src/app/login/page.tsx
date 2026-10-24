@@ -71,7 +71,7 @@ function BrandPanel() {
         </ul>
       </div>
 
-      <p className="relative text-xs text-white/60">Personal demo project · synthetic data only</p>
+      <p className="relative text-xs text-white/60">Personal demo project · seeded with synthetic data</p>
     </section>
   );
 }
@@ -99,7 +99,7 @@ export default function LoginPage() {
             <LoginForm />
           </Suspense>
           <p className="text-center text-xs text-muted-foreground">
-            Demo build with two roles: Admin and Recruiter. Synthetic data only.
+            Demo build with two roles: Admin and Recruiter. Seeded with synthetic candidates; you can upload your own resumes.
           </p>
         </div>
       </section>
