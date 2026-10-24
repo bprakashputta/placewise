@@ -1,0 +1,18 @@
+# Runs the public-link watchdog on the cloud server; restarts it if it dies and starts it on boot.
+#   sudo cp infra/server/placewise-watch.service /etc/systemd/system/ && sudo systemctl enable --now placewise-watch
+[Unit]
+Description=Placewise public link watchdog
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=placewise
+WorkingDirectory=/home/placewise/placewise
+ExecStart=/bin/sh /home/placewise/placewise/scripts/watch-public-link.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

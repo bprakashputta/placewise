@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from psycopg.rows import dict_row
 
 from .auth import require_admin
+from .config import get_settings
 from .db import pool
 from .ingest import queue
 from .ingest.sources import SEED_RESUMES
@@ -69,6 +70,8 @@ async def retry_failed() -> dict:
 async def reset_ingested(confirm: str = "") -> dict:
     """Dev only: delete ingested people/files/profiles/chunks/jobs so everything can be re-ingested.
     Keeps extraction_cache and llm_calls, so a re-ingest costs no LLM spend."""
+    if get_settings().public_demo:   # one click would wipe the shared demo for everyone with the link
+        raise HTTPException(403, "Reset is disabled on the public demo link, so the shared data can't be wiped.")
     if confirm != "yes":
         raise HTTPException(400, "pass confirm=yes")
     async with pool().connection() as conn:

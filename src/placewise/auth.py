@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 import time
 from collections import defaultdict, deque
@@ -84,7 +85,14 @@ async def require_admin(user: dict = Depends(current_user)) -> dict:
 def _client_ip(request: Request) -> str:
     """The client's address as seen by OUR proxy. The rightmost X-Forwarded-For entry is the one Next.js
     appended; earlier entries are client-controlled and could be spoofed to dodge the rate limit.
-    Behind the Cloudflare tunnel, CF-Connecting-IP is set by Cloudflare itself."""
+    Behind the Cloudflare tunnel, CF-Connecting-IP is set by Cloudflare itself. Through our Worker,
+    x-placewise-client-ip is trusted only together with the Worker's shared secret."""
+    secret = get_settings().origin_shared_secret
+    if secret and secret.get_secret_value():
+        sent = request.headers.get("x-placewise-origin", "")
+        ip = request.headers.get("x-placewise-client-ip", "").strip()
+        if ip and hmac.compare_digest(sent.encode(), secret.get_secret_value().encode()):
+            return ip[:64]
     cf = request.headers.get("cf-connecting-ip")
     if cf and get_settings().trust_cloudflare_ip:   # only behind our Cloudflare tunnel; otherwise spoofable
         return cf.strip()

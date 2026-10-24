@@ -30,7 +30,7 @@ const HEADER = {
  * "Admins only" state without any request being made. */
 export function SystemStatusView() {
   const { user, loading } = useUser();
-  if (!user && !loading) {   // /api/auth/me failed with something other than 401 (e.g. the api restarting)
+  if (!user && !loading) {   // /api/auth/me finished without a user (e.g. the api restarting); on a 401 this shows briefly before the redirect to /login
     return (
       <div className="space-y-6">
         <PageHeader {...HEADER} />

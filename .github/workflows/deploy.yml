@@ -1,0 +1,65 @@
+# Deploy: after CI passes on main (every push or merge), deploy that exact commit to the cloud server.
+# The server builds the images from the same Dockerfiles, swaps the app containers, verifies, and rolls
+# back on its own if the new version isn't healthy (scripts/deploy.sh). Secrets stay in the server's .env.
+#
+# Repository secrets:
+#   DEPLOY_SSH_KEY      private key whose public half is locked on the server to /usr/local/bin/placewise-deploy
+#   DEPLOY_HOST         server IP
+#   DEPLOY_KNOWN_HOSTS  the server's SSH host key line (so the runner can't be pointed at an impostor)
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:   # manual re-deploy of the current main (Actions → Deploy → Run workflow)
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false   # never interrupt a deploy halfway; queued runs wait their turn
+
+jobs:
+  deploy:
+    name: Deploy to Google Cloud
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://placewise.bprakashputta.workers.dev
+    steps:
+      - name: Pick the commit
+        id: sha
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up SSH
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+
+      - name: Deploy ${{ steps.sha.outputs.sha }}
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+        # The key can only run the deploy command; the argument is the commit SHA.
+        run: ssh -i ~/.ssh/deploy -o BatchMode=yes -o ServerAliveInterval=30 "placewise@$HOST" "${{ steps.sha.outputs.sha }}"
+
+      - name: Check the live site from outside
+        run: |
+          U=https://placewise.bprakashputta.workers.dev
+          for p in /login /api/health; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$U$p")
+            echo "$p → $code"; [ "$code" = 200 ] || exit 1
+          done
+          curl -s "$U/api/health" | grep -q '"ok":true'

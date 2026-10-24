@@ -1,0 +1,17 @@
+#!/bin/sh
+# Forced command for the GitHub deploy key (installed at /usr/local/bin/placewise-deploy).
+# The key can run only this: deploy one commit SHA from origin/main. Anything else is refused.
+set -eu
+SHA=${SSH_ORIGINAL_COMMAND:-}
+case "$SHA" in
+  *[!0-9a-f]*|"") echo "refused: expected a commit SHA"; exit 2 ;;
+esac
+[ ${#SHA} -eq 40 ] || { echo "refused: expected a full 40-character SHA"; exit 2; }
+cd /home/placewise/placewise
+# Run a copy: the deploy checks out new code, which may rewrite scripts/deploy.sh while it runs.
+tmp=$(mktemp /tmp/placewise-deploy.XXXXXX)
+git fetch -q origin && git show origin/main:scripts/deploy.sh > "$tmp"
+rc=0
+PLACEWISE_DIR=/home/placewise/placewise sh "$tmp" "$SHA" || rc=$?
+rm -f "$tmp"
+exit $rc
