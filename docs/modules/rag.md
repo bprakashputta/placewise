@@ -1,6 +1,6 @@
 # Ask (RAG) and smart search
 
-**Status:** Block 5 (RAG), built and measured. Conversational Ask (message routing, saved conversations, follow-ups, job-order chats) is built in Block 7: [ADR 018](../decisions/018-conversational-ask-routing-and-threads.md). Backend measured; the chat UI with saved conversations is in progress.
+**Status:** Block 5 (RAG), built and measured. Conversational Ask (message routing, saved conversations, follow-ups, job-order chats) is built in Block 7: [ADR 018](../decisions/018-conversational-ask-routing-and-threads.md). Backend measured and the chat UI with saved conversations is built.
 
 The recruiter asks a question in plain English, for example "Texas PEs in DFW with drainage experience and 8+ years". Placewise answers from the resumes only, and every claim cites the resume line it came from.
 

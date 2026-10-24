@@ -10,6 +10,7 @@ The demo runs on one Google Cloud VM with the same Docker Compose stack as local
 - **Trigger:** `.github/workflows/deploy.yml` runs when the CI workflow succeeds for a push to `main` (merges are pushes), plus a manual "Run workflow" button. It deploys exactly the commit CI tested. One deploy at a time; a running deploy is never cancelled.
 - **Build on the server** from the same Dockerfiles (`scripts/deploy.sh`), while the old containers keep serving; then recreate only `api`, `worker` and `web`. Tunnels and the database are untouched unless their config changed. The Worker is redeployed from the same commit.
 - **Verify before calling it done:** api healthy (migrations run on start), `/api/health` ok, admin login + a data query, the web app through Caddy, no container restarts for 20 s, and the public link. The workflow then checks the public link again from GitHub.
+- **Docs-only changes** (`docs/`, `*.md`) update the server's checkout and re-run the checks without restarting anything.
 - **Roll back automatically** to the previous commit (rebuild + verify) if any check fails; the workflow run goes red.
 - **Access:** a dedicated SSH key whose only permitted command is `/usr/local/bin/placewise-deploy` (accepts a 40-character SHA on `origin/main`; no shell, no port forwarding). The server's host key is pinned in the workflow secrets. `.env` never leaves the server.
 

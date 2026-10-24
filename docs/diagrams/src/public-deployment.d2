@@ -1,0 +1,55 @@
+# Public demo: Cloudflare Worker → Google Cloud VM (same Docker Compose stack) + auto-deploy (ADR 020).
+vars: {d2-config: {theme-id: 0; pad: 40}}
+direction: right
+
+classes: {
+  svc: {style: {fill: "#EEF2FF"; stroke: "#4F46E5"; border-radius: 10; font-color: "#1E1B4B"; stroke-width: 2}}
+  edge: {style: {fill: "#FFF7ED"; stroke: "#EA580C"; border-radius: 10; font-color: "#7C2D12"; stroke-width: 2}}
+  ops: {style: {fill: "#ECFDF5"; stroke: "#059669"; border-radius: 10; font-color: "#064E3B"; stroke-width: 2}}
+  store: {shape: cylinder; style: {fill: "#ECFDF5"; stroke: "#059669"; font-color: "#064E3B"; stroke-width: 2}}
+  user: {shape: oval; style: {fill: "#F1F5F9"; stroke: "#64748B"; font-color: "#334155"}}
+  group: {style: {fill: "#FFFFFF"; stroke: "#CBD5E1"; border-radius: 16; bold: true}}
+}
+
+visitor: "Recruiter / admin\nbrowser" {class: user}
+
+cf: "Cloudflare (free plan)" {
+  class: group
+  worker: "Worker\nplacewise.bprakashputta.workers.dev\ntries routes in order · retries\n\"Reconnecting…\" page · Workers Logs" {class: edge}
+}
+
+vm: "Google Cloud VM · e2-medium · us-south1 (Dallas) · always on" {
+  class: group
+  caddy: "caddy :443\nLet's Encrypt (sslip.io)\nneeds the Worker's secret" {class: edge}
+  t1: "tunnel\nquick tunnel A" {class: edge}
+  t2: "tunnel2\nquick tunnel B" {class: edge}
+  web: "web :3000\nNext.js production build" {class: svc}
+  api: "api :8000\nFastAPI · migrations on start" {class: svc}
+  worker: "worker\ningest queue" {class: svc}
+  db: "db\nPostgres 17 + pgvector\nnot published" {class: store}
+  watch: "watchdog (systemd)\nreplaces a dead tunnel" {class: ops}
+  caddy -> web
+  t1 -> web
+  t2 -> web
+  web -> api: "/api/*"
+  api -> db
+  worker -> db
+  watch -> t1 {style.stroke-dash: 3}
+  watch -> t2 {style.stroke-dash: 3}
+}
+
+gh: "GitHub" {
+  class: group
+  ci: "CI\ntests · web lint + build" {class: ops}
+  deploy: "Deploy workflow\nafter CI passes on main" {class: ops}
+  ci -> deploy: "success"
+}
+
+script: "scripts/deploy.sh\nbuild → swap api/worker/web\n→ verify → roll back on failure" {class: ops}
+
+visitor -> cf.worker: "HTTPS"
+cf.worker -> vm.caddy: "1. direct route"
+cf.worker -> vm.t1: "2. backup" {style.stroke-dash: 4}
+cf.worker -> vm.t2: "3. backup" {style.stroke-dash: 4}
+gh.deploy -> script: "SSH, deploy-only key\n(forced command)"
+script -> vm.api: "recreate" {style.stroke-dash: 3}

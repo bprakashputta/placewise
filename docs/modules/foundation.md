@@ -44,7 +44,7 @@ Two separate checks, because they answer different questions ([ADR 004](../decis
 ## Security boundary
 - **Only `/api/*` is proxied** through the web origin ([ADR 003](../decisions/003-web-proxies-only-api.md)). `/docs`, `/openapi.json`, `/livez` and `/dev/*` are unreachable through port 3000 (verified 404, including path-traversal attempts).
 - Dev-only routes are **not registered at all** in prod, and the code default is `prod` ([ADR 005](../decisions/005-app-env-dev-prod-switch.md)).
-- All published ports bind to `127.0.0.1`. The db is not published. Later, only `web` will be public (through the tunnel).
+- All published ports bind to `127.0.0.1`. The db is not published. Publicly, only `web` is reachable (through the Cloudflare Worker, see [deployment](../diagrams/deployment.md#public-demo-cloud-server)).
 - `.dockerignore` keeps `.env`, `.git`, `web/`, `docs/` and data folders out of the api build context.
 - The api container runs as non-root. **Known gap:** the web image still runs as root (deferred to the Block 9 production stage).
 
@@ -110,4 +110,4 @@ This runs the whole suite (126 tests as of Block 1) in the `seed` tools containe
 - **Block 1–2:** synthetic data; migrations, the ingest graph, the `worker` service and the Postgres `SKIP LOCKED` queue.
 - **Block 3:** the real portal (login, roles, session cookies) replaces the status page.
 - **Block 8:** `n8n` and `mailpit` services.
-- **Block 9:** production images (non-root web), Ops dashboard, the optional Cloudflare `tunnel` exposing only `web`.
+- **Block 9:** ✅ production web build, public link through Cloudflare exposing only `web`, cloud server with auto-deploy (ADR 020). Still to do: non-root web image, Ops dashboard.

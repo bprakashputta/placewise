@@ -48,7 +48,8 @@ Coordinator status → Lead proposes design → OWNER APPROVES → Lead builds �
 - Run parallel builders only for truly independent pieces, each in its own git worktree, and only with the owner's OK.
 
 ## Architecture (agreed)
-- **Docker Compose** services: `web` (Next.js App Router + Tailwind + shadcn/ui, light/dark), `api` (FastAPI, stateless), `worker` (runs LangGraph jobs from a Postgres `SKIP LOCKED` queue, scales horizontally), `db` (Postgres 17 + pgvector), `n8n`, `mailpit` (local test inbox), and optional `tunnel` (Cloudflare quick tunnel for a temporary public link).
+- **Docker Compose** services: `web` (Next.js App Router + Tailwind + shadcn/ui, light/dark), `api` (FastAPI, stateless), `worker` (runs LangGraph jobs from a Postgres `SKIP LOCKED` queue, scales horizontally), `db` (Postgres 17 + pgvector), `n8n`, `mailpit` (local test inbox), and for the public demo two `tunnel` services (Cloudflare quick tunnels) plus `caddy` on the cloud server.
+- **Public demo hosting:** a Cloudflare Worker (`placewise.bprakashputta.workers.dev`) in front of an always-on Google Cloud VM running the same Compose stack (`docker-compose.public.yml` + `docker-compose.server.yml`). Every push or merge to `main` that passes CI is deployed by `.github/workflows/deploy.yml` → `scripts/deploy.sh`, which verifies and rolls back on failure (ADR 020). So **merging to `main` deploys to the live demo**: keep `main` releasable.
 - **LangChain** for model wrappers, structured output, prompts and embeddings. Retrieval is our own SQL over Postgres + pgvector (hybrid search with typed filters), not LangChain's PGVector retriever: see ADR 017.
 - **LangGraph** for the ingest graph, the match graph (parallel fan-out scoring, approval `interrupt`) and the recruiter agent. The checkpointer is in Postgres.
 - **Known limitation:** match runs currently execute inside the API process, not on the worker queue, so the API must run as a single replica until they move (ADR 019).
@@ -91,7 +92,7 @@ outputs/                   sample outputs, eval reports, screenshots
 - Docs, prompts and diagrams for a block go on that block's branch, so code and docs merge together.
 
 ## Everything runs in Docker (MUST follow)
-- **All services run as containers:** db (Postgres + pgvector, data in a named Docker volume), api, worker, web, n8n, mailpit, tunnel.
+- **All services run as containers:** db (Postgres + pgvector, data in a named Docker volume), api, worker, web, n8n, mailpit, tunnel, caddy. The cloud server installs only Docker.
 - **Never use the host machine's Postgres, Python, Node or packages.** Run installs, tests, migrations and scripts inside containers (`docker compose exec api ...`, `docker compose run --rm ...`).
 - The host only needs Docker Desktop, git and an editor.
 - The container db is **not published on 5432** (the host has its own Postgres there). Publish it on **5433** only for debugging.
