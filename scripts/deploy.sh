@@ -87,11 +87,18 @@ verify() {  # all checks must pass; prints the first failure
   return 0
 }
 
+dc_retry() {  # docker can still be removing a container from the previous step: retry a few times
+  n=0
+  until $DC "$@" >> "$LOG" 2>&1; do
+    n=$((n + 1)); [ $n -ge 3 ] && return 1; sleep 5
+  done
+}
+
 roll_out() {  # $1 = commit; build first (old containers keep serving), then swap the app containers
   git -c advice.detachedHead=false checkout -q --force "$1" || { echo "git checkout $1 failed"; return 1; }
   $DC build $APP >> "$LOG" 2>&1 || { echo "image build failed (see $LOG)"; return 1; }
-  $DC up -d --no-deps --force-recreate $APP >> "$LOG" 2>&1 || { echo "starting app containers failed"; return 1; }
-  $DC up -d >> "$LOG" 2>&1 || { echo "compose up failed"; return 1; }   # others only if their config changed (tunnels stay)
+  dc_retry up -d --no-deps --force-recreate $APP || { echo "starting app containers failed"; return 1; }
+  dc_retry up -d || { echo "compose up failed"; return 1; }   # others only if their config changed (tunnels stay)
   ./scripts/public-link.sh --repoint >> "$LOG" 2>&1 || { echo "Worker deploy failed"; return 1; }   # Worker code from this commit
 }
 
@@ -104,6 +111,7 @@ if out=$(roll_out "$TARGET" && verify); then
 fi
 say "FAILED: $out"
 say "rolling back to $PREV"
+sleep 5   # let docker finish removing the failed containers
 if out2=$(roll_out "$PREV" && verify); then
   echo "$PREV" > logs/deployed-sha
   say "rolled back: $PREV is live again"
