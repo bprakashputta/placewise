@@ -17,6 +17,7 @@ import traceback
 from .db import close_pool, open_pool, pool
 from .ingest import queue
 from .ingest.spend import SpendCapReached
+from .llm_cache import purge_expired
 from .migrate import migrate
 
 CONCURRENCY = int(os.environ.get("WORKER_CONCURRENCY", "4"))
@@ -66,11 +67,19 @@ async def slot(n: int) -> None:
 
 
 async def reaper() -> None:
+    last_purge = 0.0
     while not _stop.is_set():
         async with pool().connection() as conn:
             n = await queue.reclaim_stale(conn)
         if n:
             print(f"[{WORKER_ID}] reclaimed {n} stale job(s)", flush=True)
+        if time.monotonic() - last_purge > 3600:   # hourly: drop expired LLM response-cache rows
+            last_purge = time.monotonic()
+            try:
+                if (gone := await purge_expired()):
+                    print(f"[{WORKER_ID}] purged {gone} expired cache row(s)", flush=True)
+            except Exception as e:
+                print(f"[{WORKER_ID}] cache purge failed: {e}", flush=True)
         try:
             await asyncio.wait_for(_stop.wait(), timeout=60)
         except asyncio.TimeoutError:

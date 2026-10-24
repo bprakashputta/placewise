@@ -53,7 +53,7 @@ def env(tmp_path, monkeypatch):
     async def spend_check():
         calls.hit("spend_check")
 
-    async def log_call(*a):
+    async def log_call(*a, **k):
         calls.hit("log_call", *a)
 
     async def fake_extract(text, model_id=None, **kw):

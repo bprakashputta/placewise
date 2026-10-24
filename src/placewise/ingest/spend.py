@@ -21,9 +21,9 @@ async def check() -> None:
 
 
 async def log_call(run_ref: str, step: str, model: str, prompt_version: int, inp: int, out: int, latency_ms: int,
-                   cost: float, status: str, error: str | None = None) -> None:
+                   cost: float, status: str, error: str | None = None, cached: int = 0) -> None:
     async with pool().connection() as conn:
         await conn.execute(
-            """INSERT INTO llm_calls (run_ref, step, model, prompt_version, input_tokens, output_tokens, latency_ms,
-               cost_usd, status, error) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (run_ref, step, model, prompt_version, inp, out, latency_ms, round(cost, 6), status, error))
+            """INSERT INTO llm_calls (run_ref, step, model, prompt_version, input_tokens, output_tokens, cached_tokens,
+               latency_ms, cost_usd, status, error) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (run_ref, step, model, prompt_version, inp, out, cached, latency_ms, round(cost, 6), status, error))

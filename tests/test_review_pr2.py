@@ -38,7 +38,8 @@ def _run_assess(monkeypatch, verdicts):
     monkeypatch.setattr(engine, "spend_check", no_spend)
     monkeypatch.setattr(engine, "log_call", no_log)
     monkeypatch.setattr(engine, "_structured", lambda *a, **k: FakeModel())
-    monkeypatch.setattr(engine, "_cost", lambda *a, **k: (0.0, 0, 0))
+    monkeypatch.setattr(engine, "_cost", lambda *a, **k: {"usd": 0.0, "input_tokens": 0, "output_tokens": 0,
+                                                            "cache_read": 0, "cache_write": 0, "response_cache": False})
     return asyncio.run(engine.assess(SPEC, PROF, asyncio.Semaphore(1), "m-test"))
 
 

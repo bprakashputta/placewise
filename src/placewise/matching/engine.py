@@ -22,12 +22,13 @@ from psycopg.rows import dict_row
 from ..db import pool
 from ..ingest.spend import check as spend_check
 from ..ingest.spend import log_call
+from ..llm_cache import response_cache
+from ..llm_cost import cached_system, usage_cost
 from ..promptlib import load
 from ..rag.rerank import rerank
 from ..rag.retrieve import Filters, _where, group_by_candidate, hybrid
 from .schema import JobSpec, MatchAssessment, Requirement, RequirementVerdict
 
-PRICES = {"claude-sonnet-5-5": (2.00, 10.00), "claude-haiku-5-5": (0.10, 0.50)}
 TOP_N, MIN_POOL, CONCURRENCY = 12, 5, 6
 # ONE limiter for the whole process: concurrent match runs share it, so many recruiters starting
 # matches at once can't exceed the Anthropic rate limit (the eval hit 429s with a per-run limiter).
@@ -39,7 +40,7 @@ def _sem() -> asyncio.Semaphore:
     if _SEM is None:
         _SEM = asyncio.Semaphore(CONCURRENCY)
     return _SEM
-MATCH_PROMPT_VERSION = 2
+MATCH_PROMPT_VERSION = 3   # v3: job order in the cached system prompt
 MIN_QUOTE_CHARS = 12
 STALE_RUN_MIN = 10
 TIMED_OUT = "timed out; please run matching again"
@@ -64,18 +65,17 @@ async def fail_interrupted_runs() -> int:
 
 def _structured(model_id: str, schema):
     if (model_id, schema.__name__) not in _models:
-        llm = ChatAnthropic(model=model_id, max_tokens=3000, max_retries=6, timeout=90)   # backs off on 429
+        # cache=: identical requests (same job order + same candidate, or same notes) replay for $0
+        llm = ChatAnthropic(model=model_id, max_tokens=3000, max_retries=6, timeout=90,   # backs off on 429
+                            cache=response_cache(schema))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             _models[(model_id, schema.__name__)] = llm.with_structured_output(schema, include_raw=True)
     return _models[(model_id, schema.__name__)]
 
 
-def _cost(model: str, raw) -> tuple[float, int, int]:
-    u = getattr(raw, "usage_metadata", None) or {}
-    pin, pout = PRICES.get(model, (0, 0))
-    i, o = u.get("input_tokens", 0), u.get("output_tokens", 0)
-    return i / 1e6 * pin + o / 1e6 * pout, i, o
+def _cost(model: str, raw) -> dict:
+    return usage_cost(model, getattr(raw, "usage_metadata", None))
 
 
 # ----------------------------------------------------------------------------- job orders
@@ -87,9 +87,12 @@ async def extract_job(notes: str) -> tuple[JobSpec, float]:
     out = await _structured(p["model"], JobSpec).ainvoke(
         [SystemMessage(p["system"]), HumanMessage(p["user"].format(notes=notes[:6000]))],
         config={"run_name": "extract_job_order", "tags": ["job_order"]})
-    cost, i, o = _cost(p["model"], out.get("raw"))
-    await log_call("job_order", "job_order.extract", p["model"], 1, i, o, int((time.perf_counter() - t0) * 1000),
-                   cost, "ok" if out.get("parsed") else "invalid_output")
+    c = _cost(p["model"], out.get("raw"))
+    cost = c["usd"]
+    await log_call("job_order", "job_order.extract", p["model"], 1, c["input_tokens"], c["output_tokens"],
+                   int((time.perf_counter() - t0) * 1000), cost,
+                   "cache_hit" if c["response_cache"] else "ok" if out.get("parsed") else "invalid_output",
+                   cached=c["cache_read"])
     if out.get("parsed") is None:
         raise RuntimeError(f"couldn't structure the job order: {out.get('parsing_error')}")
     return out["parsed"], cost
@@ -229,14 +232,19 @@ async def assess(spec: JobSpec, prof: dict, sem: asyncio.Semaphore, run_id: str)
             p = load("match_score", MATCH_PROMPT_VERSION)
             reqs = "\n".join(f"- [{r.priority}] {r.text}" for r in soft)
             t0 = time.perf_counter()
+            # The instructions + job order are identical for every candidate in this run: cached after the
+            # first call, so the rest pay 5% for that part. Only the candidate's facts and profile vary.
             out = await _structured(p["model"], MatchAssessment).ainvoke(
-                [SystemMessage(p["system"]), HumanMessage(p["user"].format(
-                    title=spec.title, requirements=reqs, job_metro=spec.metro or "not specified", facts=facts,
-                    profile=(prof.get("blind_text") or "")[:12000]))],
+                [cached_system(p["system"].format(title=spec.title, requirements=reqs,
+                                                  job_metro=spec.metro or "not specified")),
+                 HumanMessage(p["user"].format(facts=facts, profile=(prof.get("blind_text") or "")[:12000]))],
                 config={"run_name": "score_candidate", "tags": ["match"], "metadata": {"run_id": run_id}})
-            cost, i, o = _cost(p["model"], out.get("raw"))
-            await log_call(run_id, "match.score", p["model"], MATCH_PROMPT_VERSION, i, o, int((time.perf_counter() - t0) * 1000), cost,
-                           "ok" if out.get("parsed") else "invalid_output")
+            c = _cost(p["model"], out.get("raw"))
+            cost = c["usd"]
+            await log_call(run_id, "match.score", p["model"], MATCH_PROMPT_VERSION, c["input_tokens"], c["output_tokens"],
+                           int((time.perf_counter() - t0) * 1000), cost,
+                           "cache_hit" if c["response_cache"] else "ok" if out.get("parsed") else "invalid_output",
+                           cached=c["cache_read"])
         a: MatchAssessment | None = out.get("parsed")
         if a:
             flags, summary = list(a.flags), a.summary
@@ -326,8 +334,15 @@ async def _finish(run_id: str, job_order_id: int, spec: JobSpec, f: Filters) -> 
                                  FROM current_candidates c JOIN profiles pr ON pr.resume_file_id = c.resume_file_id
                                  WHERE c.person_id = ANY(%s)""", (ids,))
             profs = {r["person_id"]: r for r in await cur.fetchall()}
-        results = await asyncio.gather(*(assess(spec, profs[pid], _sem(), run_id) for pid in ids if pid in profs),
-                                       return_exceptions=True)
+        # Score the first candidate alone so it writes the prompt cache (instructions + job order); the rest
+        # then run in parallel and read it at 5% of the price. Without this, the whole first parallel wave
+        # misses the cache (measured: 48% hits vs ~90%+ with the warm-up), for one extra call's latency.
+        todo = [pid for pid in ids if pid in profs]
+        first = await asyncio.gather(*(assess(spec, profs[pid], _sem(), run_id) for pid in todo[:1]),
+                                     return_exceptions=True)
+        rest = await asyncio.gather(*(assess(spec, profs[pid], _sem(), run_id) for pid in todo[1:]),
+                                    return_exceptions=True)
+        results = [*first, *rest]
         ok = [r for r in results if isinstance(r, dict)]
         rank = {pid: i + 1 for i, pid in enumerate(ids)}
         async with pool().connection() as conn:

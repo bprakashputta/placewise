@@ -28,10 +28,11 @@ from pydantic import BaseModel, Field
 from ..db import pool
 from ..ingest.spend import check as spend_check
 from ..ingest.spend import log_call
+from ..llm_cost import usage_cost
 from ..matching.engine import hard_filters
 from ..matching.schema import JobSpec
 from ..promptlib import load
-from .answer import _cost, _structured
+from .answer import _structured
 from .graph import ask as run_rag
 
 ROUTE_PROMPT_VERSION = 2
@@ -139,9 +140,11 @@ async def route(message: str, history: list[dict], jo: dict | None) -> tuple[Rou
         r = Route(intent="search", standalone_question=message)
     if r.intent in SEARCH_KINDS and not r.standalone_question.strip():
         r.standalone_question = message
-    cost = _cost(p["model"], usage)
-    await log_call("ask", "ask.route", p["model"], ROUTE_PROMPT_VERSION, usage.get("input_tokens", 0),
-                   usage.get("output_tokens", 0), int((time.perf_counter() - t0) * 1000), cost, status)
+    c = usage_cost(p["model"], usage)
+    cost = c["usd"]
+    await log_call("ask", "ask.route", p["model"], ROUTE_PROMPT_VERSION, c["input_tokens"], c["output_tokens"],
+                   int((time.perf_counter() - t0) * 1000), cost, "cache_hit" if c["response_cache"] else status,
+                   cached=c["cache_read"])
     return r, {"flavor": "hello", "cost_usd": cost}
 
 
