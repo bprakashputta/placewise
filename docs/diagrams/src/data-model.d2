@@ -1,4 +1,4 @@
-# Ingest data model (src/placewise/migrations/001–003). Key columns only.
+# Resume data model (src/placewise/migrations/001–003, 008). Key columns only.
 vars: {d2-config: {theme-id: 0; pad: 40}}
 direction: down
 
@@ -96,9 +96,19 @@ ops: "Queue · cache · cost log" {
     model: text
     input_tokens: int
     output_tokens: int
+    cached_tokens: "int (prompt-cache reads)"
     latency_ms: int
     cost_usd: "numeric (spend cap sums today)"
-    status: "ok | invalid_output | error"
+    status: "ok | cache_hit | invalid_output | error"
+  }
+
+  llm_response_cache: "llm_response_cache (LangChain cache)" {
+    class: side
+    prompt_key: "text (sha256)" {constraint: primary_key}
+    llm_key: "text (sha256)" {constraint: primary_key}
+    value: "text (stored response)"
+    hits: int
+    created_at: "timestamptz (expires after 7 days)"
   }
 }
 
