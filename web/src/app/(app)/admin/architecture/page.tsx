@@ -7,12 +7,10 @@ import {
   CircleDollarSign,
   Cloud,
   Database,
-  GitMerge,
-  Repeat,
-  Rocket,
   EyeOff,
   FileScan,
   FileText,
+  GitMerge,
   Hand,
   Layers,
   ListFilter,
@@ -20,11 +18,13 @@ import {
   Monitor,
   Network,
   Quote,
+  Repeat,
+  Rocket,
   Scale,
   Search,
   Server,
-  ShieldCheck,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   UserCheck,
   Workflow,
@@ -115,6 +115,7 @@ const DELIVERY: { title: string; body: string; icon: LucideIcon; tone: Tone }[] 
   },
 ];
 
+// width/height = the SVG's viewBox; update them if the diagram is re-rendered.
 const DELIVERY_DIAGRAM: Diagram = {
   src: "/diagrams/public-deployment.svg",
   title: "How the live demo is hosted and deployed",
