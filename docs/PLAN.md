@@ -46,7 +46,7 @@ Status: ⬜ not started · 🟨 design proposed · 🟦 in progress · ✅ done
   - Next: wait for CI + Claude review on PR #1, fix findings → owner approves the PR → `git merge --no-ff block/02-ingest` → tag `block-02-done` → Block 3 auth + data wiring.
 - **Block 9 notes:**
   - ✅ Public spend cap set to $10/day on the cloud server (`PUBLIC_DAILY_LLM_SPEND_CAP_USD`).
-  - ⬜ LangSmith: hide inputs/outputs for any real data. Open: the owner added a few real resumes for testing, and their text appears in LangSmith traces.
+  - Data: the live demo accepts real resume uploads (owner decision, see AGENTS.md); LangSmith tracing stays on with inputs visible so traces can be shown in demos.
   - Hosting: Google Cloud VM `placewise-vm` (project `placewise-demo-1023`), about $0.85/day from the free credit; delete it (and the `placewise-ip` address) when the demo ends.
 - The early pre-design scaffold (`src/copilot/`: config, schemas, db, llm) was removed in Block 0. It's kept in git history at commit `8c55933` for reference when building blocks 2–6.
 - The local `.venv` predates the folder rename and is not used. Everything runs in Docker. Safe to delete.

@@ -7,7 +7,7 @@ An AI layer for A/E/C (Architecture, Engineering & Construction) recruiting. It 
 **Stack:** Next.js · FastAPI · LangChain · LangGraph · LangSmith · Claude · Voyage AI · Postgres + pgvector · n8n · Docker Compose
 
 ## Current status
-**Live demo:** https://placewise.bprakashputta.workers.dev (synthetic data plus a few real resumes the owner added for testing; ask the owner for a login). Runs on an always-on Google Cloud VM and is redeployed automatically from `main` ([Cloud server](#cloud-server-google-cloud-vm-always-on), [ADR 020](docs/decisions/020-auto-deploy-main-to-cloud-server.md)).
+**Live demo:** https://placewise.bprakashputta.workers.dev (seeded with synthetic candidates; you can upload your own resumes to try the pipeline; ask the owner for a login). Runs on an always-on Google Cloud VM and is redeployed automatically from `main` ([Cloud server](#cloud-server-google-cloud-vm-always-on), [ADR 020](docs/decisions/020-auto-deploy-main-to-cloud-server.md)).
 
 | Block | What works today | Details |
 |---|---|---|

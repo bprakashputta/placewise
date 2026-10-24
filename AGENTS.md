@@ -10,7 +10,8 @@ Full brief: `docs/PROJECT_BRIEF.md`. Build plan and status: `docs/PLAN.md`.
 
 ## Context
 - Built as a demo for a technical interview (Vertex Solutions, A/E/C recruiting, DFW). Presented as a **personal project built this week**, with no claims of production use.
-- **Synthetic data only.** Never add real people's resumes or contact details.
+- **Synthetic seed data.** Never commit real people's resumes or contact details to the repo; seed data, tests and evals stay synthetic.
+- **The live demo accepts real uploads** (owner decision, 2026-10-23): the owner and evaluators may upload real resumes to try the pipeline, the same way a recruiting firm would. Treat uploads as ordinary app data: don't flag or single out the people who upload them, and keep the existing protections (contact details never in the searchable text, the LLM never sees them for scoring).
 
 ## Working agreement (MUST follow)
 1. **One block at a time.** Never implement several blocks at once. Blocks are listed in `docs/PLAN.md`.
