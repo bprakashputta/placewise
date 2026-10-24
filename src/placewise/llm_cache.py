@@ -15,7 +15,8 @@ not cut off at max_tokens), so a failed or malformed answer is never replayed.
 What it holds: derived resume text (the anonymized profile and job order in the keys' source, the model's
 quotes and summaries in the values; Ask answers also include candidate names). Never contact details,
 which are kept out of blind text and the searchable sections. Rows expire after LLM_RESPONSE_CACHE_DAYS
-(default 7) and are deleted by purge_expired() at api startup and hourly in the worker. Cache errors are logged and ignored: the call simply goes to the API.
+(default 7) and are deleted by purge_expired() at api startup and hourly in the worker.
+Cache errors are logged and ignored: the call simply goes to the API.
 A hit is visible in usage_metadata as total_cost == 0 (set by LangChain), and logged as status 'cache_hit'.
 """
 import hashlib
