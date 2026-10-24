@@ -5,8 +5,11 @@
 // the tunnel returns 530 for a few seconds. So we run two independent tunnels (TUNNEL_ORIGINS,
 // comma-separated, set at deploy time) and fail over between them, with a short second round of
 // retries. A visitor sees a slightly slower page instead of an error.
-const RETRY_ALWAYS = new Set([530]); // tunnel not connected: the request never reached the app
-const RETRY_IDEMPOTENT = new Set([502, 503, 504, 520, 521, 522, 523, 524]);
+// Never reached the app, so safe to repeat even for a POST: 530 tunnel not connected, 521 connection refused,
+// 522 connect timeout, 523 origin unreachable, 525/526 TLS handshake / certificate failure.
+const RETRY_ALWAYS = new Set([530, 521, 522, 523, 525, 526]);
+// Might have reached the app: repeat only safe methods.
+const RETRY_IDEMPOTENT = new Set([502, 503, 504, 520, 524]);
 const IDEMPOTENT = new Set(["GET", "HEAD", "OPTIONS"]);
 const ROUNDS = 3;
 const FAST_FAIL_MS = 1000; // a connection failure this quick can't have delivered the request
