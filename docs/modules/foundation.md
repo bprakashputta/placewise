@@ -3,7 +3,7 @@
 ## Purpose (plain words)
 Block 0 has no recruiting features yet. It builds the base everything else runs on: three containers (database, API, web portal) that start with one command, talk to each other safely, and show a **System status** page that answers one question: *is every piece connected?*
 
-For a recruiter, this is the page that says "All systems operational", or tells you which piece is down. For the owner, it proves the full path browser → web → api → db (and LangSmith tracing) works before any AI logic is added on top.
+For an admin (Admin → System status), this is the page that says "All systems operational", or tells you which piece is down. For the owner, it proves the full path browser → web → api → db (and LangSmith tracing) works before any AI logic is added on top.
 
 ## Services
 | Service | Image / build | What it does | Host port |
@@ -15,11 +15,11 @@ For a recruiter, this is the page that says "All systems operational", or tells 
 Diagrams: [architecture](../diagrams/architecture.md) · [deployment](../diagrams/deployment.md) · [health-check sequence](../diagrams/sequence-health-check.md)
 
 ## Request flow
-1. The browser loads `http://localhost:3000` from the `web` container.
-2. The `SystemStatus` client component calls `fetch("/api/health")` on the **same origin** (no CORS, no API URL in the browser).
+1. The browser loads the portal from the `web` container (`/` redirects to the dashboard or login; the status check lives at Admin → System status, `/admin/system`).
+2. The `SystemStatusView` client component calls `fetch("/api/health")` on the **same origin** (no CORS, no API URL in the browser).
 3. Next.js `rewrites()` forwards `/api/:path*` to `http://api:8000/api/:path*` over the internal Docker network.
 4. The api runs the db and LangSmith checks and returns JSON (200 if all OK, 503 if anything is down).
-5. The page lists each check as "✓ Connected" or "✕ Down" with a **Recheck** button.
+5. The page shows each service as "Connected" or "Down" with a **Recheck** button.
 
 ## Routes
 | Route | Exposed via web (:3000)? | When it exists | Purpose |
@@ -68,7 +68,7 @@ Settings are loaded by `pydantic-settings` (`src/placewise/config.py`); keys are
 ```bash
 cp .env.example .env          # then fill keys and generate the two secrets
 docker compose up --build
-open http://localhost:3000    # System status page
+open http://localhost:3000    # dashboard or login; System status is under Admin
 ```
 - API docs (dev only): `http://localhost:8000/docs`
 - Send a test trace (dev only): `curl -X POST http://localhost:8000/dev/trace` — a test trace reached the LangSmith project `placewise`.

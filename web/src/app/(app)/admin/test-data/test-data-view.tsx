@@ -336,7 +336,15 @@ const HEADER_PROPS = {
 
 /** Admin-only, like the other admin pages: recruiters get the "Admins only" state without any request. */
 export function TestDataView() {
-  const { user } = useUser();
+  const { user, loading } = useUser();
+  if (!user && !loading) {   // /api/auth/me failed with something other than 401 (e.g. the api restarting)
+    return (
+      <div className="space-y-6">
+        <PageHeader {...HEADER_PROPS} />
+        <ApiErrorState error={new ApiError(503, "Couldn't load your account. Refresh the page to try again.")} />
+      </div>
+    );
+  }
   if (!user) {
     return (
       <div className="space-y-6">

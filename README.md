@@ -27,14 +27,16 @@ cp .env.example .env
 docker compose up --build             # add  --scale worker=3  for faster ingest
 ```
 
-Open **http://localhost:3000**. You should see "All systems operational".
+Open **http://localhost:3000**. It goes to the dashboard if you're signed in, otherwise to the login page
+(demo users `admin` and `recruiter`, passwords in `.env`). Admin → **System status** should show "All systems operational".
 
 | URL | What |
 |---|---|
-| http://localhost:3000 | Web portal (System status page for now) |
-| http://localhost:3000/seed | Seed page: synthetic data progress, stats, sample resumes (only when `APP_ENV=dev`) |
+| http://localhost:3000 | Web portal (redirects to the dashboard or the login page) |
+| http://localhost:3000/admin/system | System status: API, database and LangSmith health (admin) |
+| http://localhost:3000/admin/test-data | Test data: synthetic data progress, stats, sample resumes (admin; the dev endpoints exist only when `APP_ENV=dev`; `/seed` redirects here) |
 | http://localhost:8000/docs | API docs (only when `APP_ENV=dev`, local only) |
-| http://localhost:8000/api/candidates | Candidates API (no auth yet; local only) |
+| http://localhost:8000/api/candidates | Candidates API (requires a signed-in session; local only) |
 
 All ports bind to `127.0.0.1`. The database isn't published to the host.
 
